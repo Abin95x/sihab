@@ -256,7 +256,7 @@ button {
 }
 
 .site-menu a[aria-current="page"] {
-  color: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
 }
 
 .site-menu a:hover {
