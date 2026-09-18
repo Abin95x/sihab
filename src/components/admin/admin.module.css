@@ -3,6 +3,7 @@
   background: #f6f5f3;
   color: #111;
   font-size: 15px;
+  color-scheme: light;
 }
 
 .brand {
@@ -369,6 +370,8 @@
   min-height: 100dvh;
   padding: 16px;
   background: #f6f5f3;
+  color: #111;
+  color-scheme: light;
 }
 
 .loginCard {

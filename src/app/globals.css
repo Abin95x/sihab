@@ -1,12 +1,12 @@
 :root {
-  --paper: #ffffff;
-  --ink: #000000;
-  --ink-soft: rgba(0, 0, 0, 0.85);
-  --ink-muted: rgba(0, 0, 0, 0.5);
+  --paper: #000000;
+  --ink: #ffffff;
+  --ink-soft: rgba(255, 255, 255, 0.85);
+  --ink-muted: rgba(255, 255, 255, 0.5);
   --number: #ffca00;
   --red: #ff0000;
   --menu-bg: rgba(248, 247, 247, 0.95);
-  --placeholder: #f1f0ee;
+  --placeholder: #1a1a1a;
 
   --font-body: var(--font-inter), "Helvetica Neue", Arial, sans-serif;
   --font-display: var(--font-condensed), "Arial Narrow", sans-serif;
@@ -17,6 +17,16 @@
   --chrome-line: calc(var(--chrome-size) * 1.8);
   --chrome-top: clamp(4px, 1.6vw, 15px);
   --toggle: 44px;
+
+  color-scheme: dark;
+}
+
+/* The menu and lightbox keep their light panels on the dark site. */
+.site-menu,
+.lightbox {
+  --ink: #000000;
+  --ink-soft: rgba(0, 0, 0, 0.85);
+  --ink-muted: rgba(0, 0, 0, 0.5);
 
   color-scheme: light;
 }
@@ -288,25 +298,6 @@ button {
 }
 
 /* ---------- Homepage marquee ---------- */
-
-/* Homepage runs dark: white marquee on black. The menu and lightbox keep their light panels. */
-body:has(.marquee) {
-  --paper: #000000;
-  --ink: #ffffff;
-  --ink-soft: rgba(255, 255, 255, 0.85);
-  --ink-muted: rgba(255, 255, 255, 0.5);
-  --placeholder: #1a1a1a;
-
-  color-scheme: dark;
-}
-
-body:has(.marquee) :is(.site-menu, .lightbox) {
-  --ink: #000000;
-  --ink-soft: rgba(0, 0, 0, 0.85);
-  --ink-muted: rgba(0, 0, 0, 0.5);
-
-  color-scheme: light;
-}
 
 .marquee {
   position: fixed;
