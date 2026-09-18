@@ -1,0 +1,52 @@
+- generic [active] [ref=e1]:
+  - banner:
+    - link "SIHAB" [ref=e2] [cursor=pointer]:
+      - /url: /
+    - button "Open menu" [ref=e3] [cursor=pointer]
+  - main:
+    - generic [aria-hidden]:
+      - generic:
+        - generic: SIHAB
+        - generic: SIHAB
+        - generic: SIHAB
+        - generic: SIHAB
+    - heading "Sihab — Photographer" [level=1] [ref=e5]
+    - generic:
+      - generic:
+        - figure "01" [ref=e6]:
+          - button "Open photograph 01" [ref=e7]:
+            - img "Photograph 01 by Sihab" [ref=e8]
+          - generic [aria-hidden]: "01"
+        - figure "03" [ref=e9]:
+          - button "Open photograph 03" [ref=e10]:
+            - img "Photograph 03 by Sihab" [ref=e11]
+          - generic [aria-hidden]: "03"
+        - figure "05" [ref=e12]:
+          - button "Open photograph 05" [ref=e13]:
+            - img "Photograph 05 by Sihab" [ref=e14]
+          - generic [aria-hidden]: "05"
+        - figure "07" [ref=e15]:
+          - button "Open photograph 07" [ref=e16]:
+            - img "Photograph 07 by Sihab" [ref=e17]
+          - generic [aria-hidden]: "07"
+      - generic:
+        - figure "02" [ref=e18]:
+          - button "Open photograph 02" [ref=e19]:
+            - img "Photograph 02 by Sihab" [ref=e20]
+          - generic [aria-hidden]: "02"
+        - figure "04" [ref=e21]:
+          - button "Open photograph 04" [ref=e22]:
+            - img "Photograph 04 by Sihab" [ref=e23]
+          - generic [aria-hidden]: "04"
+        - figure "06" [ref=e24]:
+          - button "Open photograph 06" [ref=e25]:
+            - img "Photograph 06 by Sihab" [ref=e26]
+          - generic [aria-hidden]: "06"
+    - paragraph [ref=e27]: Sihab is a photographer working across editorial, commercial and personal projects. The work leans toward quiet light, worn textures and the small unguarded moments between frames — portraits that feel observed rather than staged. Available for commissions and collaborations worldwide.
+  - contentinfo:
+    - paragraph [ref=e28]:
+      - link "Email" [ref=e29] [cursor=pointer]:
+        - /url: mailto:hello@sihab.com
+      - link "Instagram" [ref=e33] [cursor=pointer]:
+        - /url: https://www.instagram.com/sihabjango/
+  - button "Open Next.js Dev Tools" [ref=e43] [cursor=pointer]

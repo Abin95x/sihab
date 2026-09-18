@@ -289,6 +289,25 @@ button {
 
 /* ---------- Homepage marquee ---------- */
 
+/* Homepage runs dark: white marquee on black. The menu and lightbox keep their light panels. */
+body:has(.marquee) {
+  --paper: #000000;
+  --ink: #ffffff;
+  --ink-soft: rgba(255, 255, 255, 0.85);
+  --ink-muted: rgba(255, 255, 255, 0.5);
+  --placeholder: #1a1a1a;
+
+  color-scheme: dark;
+}
+
+body:has(.marquee) :is(.site-menu, .lightbox) {
+  --ink: #000000;
+  --ink-soft: rgba(0, 0, 0, 0.85);
+  --ink-muted: rgba(0, 0, 0, 0.5);
+
+  color-scheme: light;
+}
+
 .marquee {
   position: fixed;
   inset: 0;
