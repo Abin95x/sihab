@@ -20,7 +20,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
 
   if (!isDbConfigured()) {
     loadError =
-      "Database is not configured, so the public pages are showing demo photos. Add DATABASE_URL, run `npm run db:push` (and optionally `npm run db:seed` to copy the demo photos in), then restart.";
+      "Database is not configured, so the public pages are empty. Add DATABASE_URL, run `npm run db:push`, then restart.";
   } else {
     try {
       if (active === "home") homePhotos = await queryHomePhotos();

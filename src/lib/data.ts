@@ -3,7 +3,6 @@ import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "
 import { unstable_cache } from "next/cache";
 import { connection } from "next/server";
 import { getDb, isDbConfigured } from "./db";
-import { demoHomePhotos, demoStories } from "./demo";
 import { photos, stories } from "./db/schema";
 import type { Page, PhotoMeta, Section, StoryWithPhotos } from "./photos";
 
@@ -16,8 +15,8 @@ const photoMeta = {
 };
 
 /** How many items the public pages load at a time as the visitor scrolls. */
-export const HOME_PAGE_SIZE = 12;
-export const STORIES_PAGE_SIZE = 3;
+const HOME_PAGE_SIZE = 12;
+const STORIES_PAGE_SIZE = 3;
 
 type Range = { offset?: number; limit?: number };
 
@@ -118,15 +117,15 @@ const cachedStories = unstable_cache(
   CACHE,
 );
 
-// Public pages render at request time (for the CSP nonce) from the cache above. Without DATABASE_URL
-// they show the demo photos in public/demo; if a configured database fails they fall back to an empty state.
+// Public pages render at request time (for the CSP nonce) from the cache above. Without a database, or if
+// it fails, they fall back to an empty state.
 
 const EMPTY_PAGE: Page<never> = { items: [], nextOffset: null };
 
 /** One slice of the homepage photos, starting at `offset`. */
 export async function getHomePhotos(offset = 0): Promise<Page<PhotoMeta>> {
   await connection();
-  if (!isDbConfigured()) return toPage(demoHomePhotos.slice(offset, offset + HOME_PAGE_SIZE + 1), offset, HOME_PAGE_SIZE);
+  if (!isDbConfigured()) return EMPTY_PAGE;
   try {
     return toPage(await cachedHomePhotos(offset), offset, HOME_PAGE_SIZE);
   } catch (error) {
@@ -141,13 +140,7 @@ export async function getHomePhotos(offset = 0): Promise<Page<PhotoMeta>> {
  */
 export async function getStories(section: Section, offset = 0, search = ""): Promise<Page<StoryWithPhotos>> {
   await connection();
-  if (!isDbConfigured()) {
-    const needle = search.toLowerCase();
-    const matches = search
-      ? demoStories[section].filter((s) => `${s.title}\n${s.description}`.toLowerCase().includes(needle))
-      : demoStories[section];
-    return toPage(matches.slice(offset, offset + STORIES_PAGE_SIZE + 1), offset, STORIES_PAGE_SIZE);
-  }
+  if (!isDbConfigured()) return EMPTY_PAGE;
   try {
     const rows = search
       ? await queryStories(section, { offset, limit: STORIES_PAGE_SIZE + 1, search })

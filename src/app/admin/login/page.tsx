@@ -12,7 +12,6 @@ export default function LoginPage() {
     <main className={styles.loginPage}>
       <div className={styles.loginCard}>
         <p className={styles.wordmark}>
-          {site.name}
           <span className={styles.wordmarkTag}>Admin</span>
         </p>
         <div>
@@ -21,8 +20,9 @@ export default function LoginPage() {
         </div>
         {!isAdminConfigured() && (
           <p className={styles.alert}>
-            Login is disabled until <code>DATABASE_URL</code> and <code>AUTH_SECRET</code> (32+ characters) are set.
-            Then create an account with <code>npm run admin:create -- &lt;username&gt;</code>.
+            Login is disabled until <code>DATABASE_URL</code> and{" "}
+            <code>AUTH_SECRET</code> (32+ characters) are set. Then create an
+            account with <code>npm run admin:create -- &lt;username&gt;</code>.
           </p>
         )}
         <LoginForm />

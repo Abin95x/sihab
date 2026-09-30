@@ -11,7 +11,7 @@ import pg from "pg";
 
 nextEnv.loadEnvConfig(process.cwd());
 
-// Keep in sync with normalizeUsername() and the password limits in src/lib/validation.ts.
+// Keep in sync with normalizeUsername() and PASSWORD_MAX in src/lib/validation.ts.
 const USERNAME_RE = /^[a-z0-9._-]{3,64}$/;
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 256;

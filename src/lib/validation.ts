@@ -17,8 +17,7 @@ export function readText(value: unknown, max: number, { multiline = false } = {}
   return text.length > max ? null : text;
 }
 
-export const USERNAME_RE = /^[a-z0-9._-]{3,64}$/;
-export const PASSWORD_MIN = 12;
+const USERNAME_RE = /^[a-z0-9._-]{3,64}$/;
 export const PASSWORD_MAX = 256;
 
 /** Usernames are case-insensitive and stored lowercase. Keep in sync with scripts/create-admin.mjs. */

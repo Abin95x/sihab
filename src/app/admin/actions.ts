@@ -13,7 +13,7 @@ import { processImage } from "@/lib/images";
 import { isSection, isUuid, type Section } from "@/lib/photos";
 import { clientIp } from "@/lib/memory-rate-limit";
 import { burnPasswordCheck, verifyPassword } from "@/lib/password";
-import { consume, reset } from "@/lib/rate-limit";
+import { consume, lockedFor, recordFailure, reset } from "@/lib/rate-limit";
 import { deletePhotoFiles, isStorageConfigured, putPhotoFiles } from "@/lib/storage";
 import { isBoolean, normalizeUsername, PASSWORD_MAX, readText } from "@/lib/validation";
 
@@ -52,11 +52,25 @@ const STORAGE_MISSING: ActionResult = {
 
 // ---------- Auth ----------
 
-// Failed-guess budgets. Per IP to stop one client guessing; per username to stop a spread-out attack
-// on the one account. The username limit is looser so an attacker can't easily lock the admin out.
-const LOGIN_LIMIT_PER_IP = { limit: 10, windowSeconds: 15 * 60 };
+// Per IP: 5 wrong passwords lock sign-in from that address for 30 minutes. Per username: a looser budget
+// on all attempts stops a guessing attack spread over many addresses. It is kept loose on purpose: a tight
+// per-account lock would let anyone lock the real admin out just by typing wrong passwords for them.
+const LOGIN_LOCKOUT = { maxFailures: 5, lockSeconds: 30 * 60 };
 const LOGIN_LIMIT_PER_USER = { limit: 30, windowSeconds: 60 * 60 };
 const LOGIN_FAILED: ActionResult = { error: "Incorrect username or password." };
+
+function lockedOut(seconds: number): ActionResult {
+  const minutes = Math.ceil(seconds / 60);
+  return { error: `Too many failed attempts. Sign-in is locked for ${minutes} minute${minutes === 1 ? "" : "s"}.` };
+}
+
+/** Counts a wrong password against this address and says how many tries are left, or that it is now locked. */
+async function failedLogin(ipKey: string): Promise<ActionResult> {
+  const { failuresLeft, lockedForSeconds } = await recordFailure(ipKey, LOGIN_LOCKOUT);
+  if (lockedForSeconds) return lockedOut(lockedForSeconds);
+  const tries = `${failuresLeft} attempt${failuresLeft === 1 ? "" : "s"} left`;
+  return { error: `Incorrect username or password. ${tries} before sign-in is locked for 30 minutes.` };
+}
 
 export async function login(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   if (!isAdminConfigured()) {
@@ -69,20 +83,22 @@ export async function login(_prev: ActionResult, formData: FormData): Promise<Ac
     return LOGIN_FAILED;
   }
 
-  const ipKey = `login:ip:${clientIp(await headers())}`;
+  const ipKey = `login:fail:ip:${clientIp(await headers())}`;
   const userKey = `login:user:${username}`;
-  let limits: Awaited<ReturnType<typeof consume>>[];
+  let ipLockedFor: number;
+  let userLimit: Awaited<ReturnType<typeof consume>>;
   try {
-    limits = await Promise.all([consume(ipKey, LOGIN_LIMIT_PER_IP), consume(userKey, LOGIN_LIMIT_PER_USER)]);
+    [ipLockedFor, userLimit] = await Promise.all([
+      lockedFor(ipKey, LOGIN_LOCKOUT),
+      consume(userKey, LOGIN_LIMIT_PER_USER),
+    ]);
   } catch (error) {
     console.error("[sihab] Login rate limit check failed", error);
     return { error: "Sign-in is unavailable right now. Check the database connection and that `npm run db:push` has run." };
   }
-  const blocked = limits.find((l) => !l.allowed);
-  if (blocked) {
-    const minutes = Math.ceil(blocked.retryAfterSeconds / 60);
-    return { error: `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` };
-  }
+  // Checked before the password, so a locked-out address learns nothing from further guesses.
+  if (ipLockedFor) return lockedOut(ipLockedFor);
+  if (!userLimit.allowed) return lockedOut(userLimit.retryAfterSeconds);
 
   const db = getDb();
   const [admin] = await db
@@ -92,11 +108,11 @@ export async function login(_prev: ActionResult, formData: FormData): Promise<Ac
     .limit(1);
   if (!admin) {
     await burnPasswordCheck(password);
-    return LOGIN_FAILED;
+    return failedLogin(ipKey);
   }
-  if (!(await verifyPassword(password, admin.passwordHash))) return LOGIN_FAILED;
+  if (!(await verifyPassword(password, admin.passwordHash))) return failedLogin(ipKey);
 
-  // A successful sign-in clears this IP's budget; the per-username budget runs out on its own.
+  // A successful sign-in clears this IP's failures; the per-username budget runs out on its own.
   await Promise.all([
     reset(ipKey),
     db.update(admins).set({ lastLoginAt: new Date() }).where(eq(admins.id, admin.id)),

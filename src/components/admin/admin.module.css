@@ -880,8 +880,7 @@
 /* ---------- Buttons ---------- */
 
 .primary,
-.secondary,
-.danger {
+.secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -927,18 +926,8 @@
   border-color: var(--a-ink);
 }
 
-.danger {
-  background: transparent;
-  color: var(--a-muted);
-}
-
-.danger:hover {
-  color: var(--a-danger);
-}
-
 .primary:disabled,
-.secondary:disabled,
-.danger:disabled {
+.secondary:disabled {
   opacity: 0.5;
   cursor: progress;
 }

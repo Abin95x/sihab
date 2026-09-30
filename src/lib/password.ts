@@ -17,7 +17,7 @@ function derive(password: string, salt: Buffer, n: number, r: number, p: number)
   );
 }
 
-export async function hashPassword(password: string) {
+async function hashPassword(password: string) {
   const salt = randomBytes(SALT_BYTES);
   const key = await derive(password, salt, N, R, P);
   return `scrypt$${N}$${R}$${P}$${salt.toString("base64url")}$${key.toString("base64url")}`;

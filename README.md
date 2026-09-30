@@ -15,7 +15,6 @@ Clicking any photo opens a full-screen viewer. It supports keyboard arrows, swip
 npm install
 cp .env.example .env.local   # then fill in the values
 npm run db:push              # creates the tables in your database
-npm run db:seed              # optional: copies the demo photos into the database
 npm run admin:create -- <username>   # creates the admin account; asks for a password
 npm run dev                  # http://localhost:3000
 ```
@@ -30,14 +29,6 @@ npm run dev                  # http://localhost:3000
 | `S3_BUCKET`      | Bucket name. It must be public, since pages link to the files directly. |
 | `NEXT_PUBLIC_PHOTOS_URL` | Public URL of the bucket, e.g. `https://<project>.supabase.co/storage/v1/object/public/<bucket>`. Inlined at build time. |
 | `AUTH_SECRET`    | 32+ character random string for signing the session cookie (`openssl rand -base64 32`). |
-
-## Demo photos
-
-Until `DATABASE_URL` is set, the public pages show Sihab's photos from `public/demo/`: 7 on the homepage (reused from the stories), 7 stories on Editorial and 5 on Commercial. The titles and descriptions are in `src/lib/demo-content.json`. They can't be edited from the admin in this mode.
-
-Once a database is connected the site shows only database content. To start from these photos instead of an empty site, run `npm run db:seed`. It copies them into the database, where they can be deleted from `/admin` like any other photo. It only fills sections that are empty, so it's safe to run again.
-
-The demo photos come from Sihab's own Behance projects (© Sihab Sharafudheen, all rights reserved), resized to 1600px on the long edge. `public/demo/CREDITS.md` maps each file to its project. You can delete `public/demo/` once the photos are in the database.
 
 ## Admin accounts
 
@@ -58,7 +49,7 @@ Uploads accept JPEG, PNG, WebP and AVIF. Large images are shrunk in the browser 
 ## How it's built
 
 - **Database:** PostgreSQL through [Drizzle ORM](https://orm.drizzle.team). Schema: `src/lib/db/schema.ts`.
-- **Image storage:** image files go to an S3-compatible public bucket (Supabase Storage) as `photos/<id>/full.webp` and `photos/<id>/thumb.webp`, with long-lived cache headers. Postgres holds only the photo metadata. `/api/photos/:id/(thumb|full)` redirects to the bucket for old links.
+- **Image storage:** image files go to an S3-compatible public bucket (Supabase Storage) as `photos/<id>/full.webp` and `photos/<id>/thumb.webp`, with long-lived cache headers. Postgres holds only the photo metadata.
 - **Auth:** admin accounts in Postgres with scrypt password hashes. The session is a signed, httpOnly JWT cookie (`jose`) that is checked against the account on every admin request, so changing a password ends its sessions. Every admin page and Server Action checks the session on the server.
 - **Security:** `src/proxy.ts` sends a nonce-based Content-Security-Policy on every page and throttles each IP (pages, Server Actions and login attempts separately). Login attempts are also limited in the database (`rate_limits` table) per IP and per username, so the limit holds across server instances. Other security headers (HSTS, `nosniff`, `X-Frame-Options`, …) are set in `next.config.ts`. Server Actions validate every argument; uploads are checked by decoded image format and pixel count, not by file name or MIME type. All queries go through Drizzle's parameterised SQL.
 - **Caching:** public pages read their data through `unstable_cache` (`src/lib/data.ts`), so visits don't hit Postgres. Every admin change invalidates the cache immediately.
@@ -68,7 +59,7 @@ Uploads accept JPEG, PNG, WebP and AVIF. Large images are shrunk in the browser 
 src/
   app/(site)/          public pages (home, editorial, commercial)
   app/admin/           admin dashboard, login, Server Actions
-  app/api/photos/      redirect from old image URLs to the bucket
+  app/api/more/        next slice of a public list, for infinite scroll and search
   components/          header, footer, marquee, lightbox, story list
   components/admin/    upload box, photo grid, story forms
   lib/                 db, auth, data queries, image processing, site config
@@ -85,7 +76,6 @@ src/
 | `npm run lint`        | ESLint                                         |
 | `npm run db:push`     | Apply the schema to the database               |
 | `npm run db:generate` | Generate SQL migration files instead of pushing |
-| `npm run db:seed`     | Copy the demo photos into empty sections       |
 | `npm run admin:create -- <username>` | Create an admin, or reset its password |
 | `npm run db:studio`   | Browse the database in Drizzle Studio          |
 

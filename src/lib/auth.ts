@@ -84,7 +84,7 @@ export async function verifySession(token: string | undefined): Promise<Session 
 }
 
 /** The signed-in admin, or null. Cached per request, so several checks cost one query. */
-export const getSession = cache(async () => verifySession((await cookies()).get(SESSION_COOKIE)?.value));
+const getSession = cache(async () => verifySession((await cookies()).get(SESSION_COOKIE)?.value));
 
 /** Use at the top of every admin page and Server Action. */
 export async function requireAdmin() {

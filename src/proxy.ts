@@ -92,6 +92,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except build assets, the photo redirect route and static files such as /demo/*.jpg.
+  // Everything except API routes, build assets and static files.
   matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)"],
 };
