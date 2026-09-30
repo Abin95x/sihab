@@ -1,3 +1,4 @@
+import { ScrollButton } from "@/components/scroll-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
@@ -7,6 +8,7 @@ export default function SiteLayout({ children }: Readonly<{ children: React.Reac
       <SiteHeader />
       <main className="site-main">{children}</main>
       <SiteFooter />
+      <ScrollButton />
     </>
   );
 }
