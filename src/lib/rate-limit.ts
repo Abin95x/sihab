@@ -1,30 +1,43 @@
 import "server-only";
+import { lt, sql } from "drizzle-orm";
+import { getDb } from "./db";
+import { rateLimits } from "./db/schema";
 
-// In-memory login throttle. Per server instance only, which is enough to slow down guessing.
-const WINDOW_MS = 10 * 60 * 1000;
-const MAX_FAILURES = 5;
+// Fixed-window rate limiter stored in Postgres, so the count is shared by every server instance
+// (serverless functions don't share memory). One upsert per call.
 
-const failures = new Map<string, { count: number; firstAt: number }>();
+export type Limit = { limit: number; windowSeconds: number };
+export type LimitResult = { allowed: boolean; retryAfterSeconds: number };
 
-export function isRateLimited(key: string) {
-  const entry = failures.get(key);
-  if (!entry) return false;
-  if (Date.now() - entry.firstAt > WINDOW_MS) {
-    failures.delete(key);
-    return false;
+/** Counts one hit against `key` and reports whether it is within the limit. */
+export async function consume(key: string, { limit, windowSeconds }: Limit): Promise<LimitResult> {
+  const db = getDb();
+  const window = sql`make_interval(secs => ${windowSeconds})`;
+  const [row] = await db
+    .insert(rateLimits)
+    .values({ key, count: 1, resetAt: sql`now() + ${window}` })
+    .onConflictDoUpdate({
+      target: rateLimits.key,
+      set: {
+        count: sql`case when ${rateLimits.resetAt} <= now() then 1 else ${rateLimits.count} + 1 end`,
+        resetAt: sql`case when ${rateLimits.resetAt} <= now() then now() + ${window} else ${rateLimits.resetAt} end`,
+      },
+    })
+    .returning({
+      count: rateLimits.count,
+      retryAfter: sql<number>`ceil(extract(epoch from ${rateLimits.resetAt} - now()))::int`,
+    });
+
+  // Expired rows are only reset lazily, so sweep them out now and then.
+  if (Math.random() < 0.02) {
+    db.delete(rateLimits)
+      .where(lt(rateLimits.resetAt, sql`now()`))
+      .catch((error) => console.error("[sihab] Failed to sweep rate limits", error));
   }
-  return entry.count >= MAX_FAILURES;
+
+  return { allowed: row.count <= limit, retryAfterSeconds: Math.max(1, Number(row.retryAfter)) };
 }
 
-export function recordFailure(key: string) {
-  const entry = failures.get(key);
-  if (!entry || Date.now() - entry.firstAt > WINDOW_MS) {
-    failures.set(key, { count: 1, firstAt: Date.now() });
-  } else {
-    entry.count += 1;
-  }
-}
-
-export function clearFailures(key: string) {
-  failures.delete(key);
+export async function reset(key: string) {
+  await getDb().delete(rateLimits).where(sql`${rateLimits.key} = ${key}`);
 }

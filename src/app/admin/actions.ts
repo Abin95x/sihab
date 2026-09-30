@@ -2,16 +2,20 @@
 
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { checkCredentials, createSession, destroySession, isAdminConfigured, requireAdmin } from "@/lib/auth";
+import { createSession, destroySession, isAdminConfigured, requireAdmin } from "@/lib/auth";
+import { CONTENT_TAG } from "@/lib/data";
 import { getDb, isDbConfigured } from "@/lib/db";
-import { photos, stories } from "@/lib/db/schema";
+import { admins, photos, stories } from "@/lib/db/schema";
 import { processImage } from "@/lib/images";
 import { isSection, isUuid, type Section } from "@/lib/photos";
-import { clearFailures, isRateLimited, recordFailure } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/memory-rate-limit";
+import { burnPasswordCheck, verifyPassword } from "@/lib/password";
+import { consume, reset } from "@/lib/rate-limit";
 import { deletePhotoFiles, isStorageConfigured, putPhotoFiles } from "@/lib/storage";
+import { isBoolean, normalizeUsername, PASSWORD_MAX, readText } from "@/lib/validation";
 
 export type ActionResult = { ok?: boolean; error?: string; id?: string };
 
@@ -22,6 +26,7 @@ const MAX_REORDER = 1000;
 
 // The homepage is included because any photo may be starred to appear there.
 function revalidateSection(section: Section) {
+  updateTag(CONTENT_TAG);
   revalidatePath("/");
   revalidatePath(`/${section}`);
   revalidatePath("/admin");
@@ -47,24 +52,56 @@ const STORAGE_MISSING: ActionResult = {
 
 // ---------- Auth ----------
 
+// Failed-guess budgets. Per IP to stop one client guessing; per username to stop a spread-out attack
+// on the one account. The username limit is looser so an attacker can't easily lock the admin out.
+const LOGIN_LIMIT_PER_IP = { limit: 10, windowSeconds: 15 * 60 };
+const LOGIN_LIMIT_PER_USER = { limit: 30, windowSeconds: 60 * 60 };
+const LOGIN_FAILED: ActionResult = { error: "Incorrect username or password." };
+
 export async function login(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   if (!isAdminConfigured()) {
-    return { error: "Admin login is not configured. Set ADMIN_USERNAME, ADMIN_PASSWORD and AUTH_SECRET." };
-  }
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (isRateLimited(ip)) {
-    return { error: "Too many attempts. Try again in a few minutes." };
+    return { error: "Admin login is not configured. Set DATABASE_URL and AUTH_SECRET (32+ characters)." };
   }
 
-  const username = String(formData.get("username") ?? "");
-  const password = String(formData.get("password") ?? "");
-  if (!checkCredentials(username, password)) {
-    recordFailure(ip);
-    return { error: "Incorrect username or password." };
+  const username = normalizeUsername(formData.get("username"));
+  const password = formData.get("password");
+  if (!username || typeof password !== "string" || !password || password.length > PASSWORD_MAX) {
+    return LOGIN_FAILED;
   }
 
-  clearFailures(ip);
-  await createSession(username);
+  const ipKey = `login:ip:${clientIp(await headers())}`;
+  const userKey = `login:user:${username}`;
+  let limits: Awaited<ReturnType<typeof consume>>[];
+  try {
+    limits = await Promise.all([consume(ipKey, LOGIN_LIMIT_PER_IP), consume(userKey, LOGIN_LIMIT_PER_USER)]);
+  } catch (error) {
+    console.error("[sihab] Login rate limit check failed", error);
+    return { error: "Sign-in is unavailable right now. Check the database connection and that `npm run db:push` has run." };
+  }
+  const blocked = limits.find((l) => !l.allowed);
+  if (blocked) {
+    const minutes = Math.ceil(blocked.retryAfterSeconds / 60);
+    return { error: `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` };
+  }
+
+  const db = getDb();
+  const [admin] = await db
+    .select({ id: admins.id, passwordHash: admins.passwordHash })
+    .from(admins)
+    .where(eq(admins.username, username))
+    .limit(1);
+  if (!admin) {
+    await burnPasswordCheck(password);
+    return LOGIN_FAILED;
+  }
+  if (!(await verifyPassword(password, admin.passwordHash))) return LOGIN_FAILED;
+
+  // A successful sign-in clears this IP's budget; the per-username budget runs out on its own.
+  await Promise.all([
+    reset(ipKey),
+    db.update(admins).set({ lastLoginAt: new Date() }).where(eq(admins.id, admin.id)),
+  ]);
+  await createSession(admin);
   redirect("/admin");
 }
 
@@ -86,7 +123,9 @@ export async function uploadPhoto(formData: FormData): Promise<ActionResult> {
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "No file received." };
-  if (file.size > MAX_UPLOAD_BYTES) return { error: `${file.name} is larger than 12 MB.` };
+  // The name is only echoed back in messages; bound it so a crafted one can't bloat the response.
+  const name = readText(file.name, 120) || "This file";
+  if (file.size > MAX_UPLOAD_BYTES) return { error: `${name} is larger than 12 MB.` };
 
   const db = getDb();
   const [story] = await db
@@ -100,7 +139,7 @@ export async function uploadPhoto(formData: FormData): Promise<ActionResult> {
   try {
     image = await processImage(Buffer.from(await file.arrayBuffer()));
   } catch {
-    return { error: `${file.name} could not be read. Use JPEG, PNG, WebP or AVIF.` };
+    return { error: `${name} could not be read. Use JPEG, PNG, WebP or AVIF.` };
   }
 
   const [{ next }] = await db
@@ -114,7 +153,7 @@ export async function uploadPhoto(formData: FormData): Promise<ActionResult> {
     await putPhotoFiles(id, image);
   } catch (error) {
     console.error("[sihab] Failed to store photo files", error);
-    return { error: `${file.name} could not be saved to storage. Try again.` };
+    return { error: `${name} could not be saved to storage. Try again.` };
   }
 
   try {
@@ -156,6 +195,7 @@ export async function setFeatured(id: string, featured: boolean): Promise<Action
   await requireAdmin();
   if (!isDbConfigured()) return DB_MISSING;
   if (!isUuid(id)) return { error: "Unknown photo." };
+  if (!isBoolean(featured)) return { error: "Invalid request." };
 
   const [updated] = await getDb()
     .update(photos)
@@ -173,6 +213,7 @@ export async function setPhotoArchived(id: string, archived: boolean): Promise<A
   await requireAdmin();
   if (!isDbConfigured()) return DB_MISSING;
   if (!isUuid(id)) return { error: "Unknown photo." };
+  if (!isBoolean(archived)) return { error: "Invalid request." };
 
   const [updated] = await getDb()
     .update(photos)
@@ -206,13 +247,11 @@ export async function reorderPhotos(storyId: string, ids: string[]): Promise<Act
 // ---------- Stories (editorial / commercial) ----------
 
 function readStoryFields(formData: FormData) {
-  const title = String(formData.get("title") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
+  const title = readText(formData.get("title") ?? "", MAX_TITLE);
+  const description = readText(formData.get("description") ?? "", MAX_DESCRIPTION, { multiline: true });
+  if (title === null) return { error: `Title must be under ${MAX_TITLE} characters.` } as const;
   if (!title) return { error: "Title is required." } as const;
-  if (title.length > MAX_TITLE) return { error: `Title must be under ${MAX_TITLE} characters.` } as const;
-  if (description.length > MAX_DESCRIPTION) {
-    return { error: `Description must be under ${MAX_DESCRIPTION} characters.` } as const;
-  }
+  if (description === null) return { error: `Description must be under ${MAX_DESCRIPTION} characters.` } as const;
   return { title, description } as const;
 }
 
@@ -265,6 +304,7 @@ export async function setStoryArchived(id: string, archived: boolean): Promise<A
   await requireAdmin();
   if (!isDbConfigured()) return DB_MISSING;
   if (!isUuid(id)) return { error: "Unknown story." };
+  if (!isBoolean(archived)) return { error: "Invalid request." };
 
   const [updated] = await getDb()
     .update(stories)

@@ -11,6 +11,9 @@
   --a-danger: #b3261e;
   --a-radius: 3px;
 
+  /* Height of the phone tab bar, not counting the home-indicator inset. */
+  --a-tabbar: 64px;
+
   /* The global focus ring uses --ink, which is white on the public site. */
   --ink: var(--a-ink);
 
@@ -56,7 +59,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
-  padding: 16px 16px 0;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px
+    max(16px, env(safe-area-inset-left));
   background: var(--a-bg);
   border-bottom: 1px solid var(--a-line);
   color: var(--a-ink);
@@ -98,39 +102,49 @@
 
 /* Nav */
 
+/* Phones: a fixed tab bar along the bottom of the screen. From 900px it is the sidebar list. */
 .nav {
-  order: 3;
-  flex: 1 0 100%;
-  min-width: 0;
-  margin-inline: -16px;
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  background: var(--a-bg);
+  border-top: 1px solid var(--a-line);
 }
 
 @media (min-width: 900px) {
   .nav {
-    order: 0;
+    position: static;
     flex: 1 1 auto;
-    margin-inline: 0;
+    padding: 0;
+    background: none;
+    border-top: 0;
   }
 }
 
 .navList {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   margin: 0;
-  padding: 0 16px 12px;
-  overflow-x: auto;
+  padding: 0;
   list-style: none;
-  scrollbar-width: none;
 }
 
 .navLink {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: 999px;
+  justify-content: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 6px 4px;
+  border-radius: 10px;
   color: var(--a-muted);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
@@ -159,16 +173,20 @@
 
 @media (min-width: 900px) {
   .navList {
+    display: flex;
     flex-direction: column;
     gap: 2px;
     margin-inline: -12px;
-    padding: 0;
-    overflow: visible;
   }
 
   .navLink {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 0;
     padding: 9px 12px;
     border-radius: 8px;
+    font-size: 13px;
   }
 }
 
@@ -324,7 +342,7 @@
   gap: 32px;
   width: min(100%, 1040px);
   margin-inline: auto;
-  padding: 32px 16px 96px;
+  padding: 28px 16px calc(64px + var(--a-tabbar) + env(safe-area-inset-bottom));
 }
 
 @media (min-width: 900px) {
@@ -418,6 +436,15 @@
 .tile {
   -webkit-touch-callout: none;
   user-select: none;
+  touch-action: manipulation;
+}
+
+/* Bigger tile buttons for fingers. */
+@media (pointer: coarse) {
+  .tileButton {
+    width: 38px;
+    height: 38px;
+  }
 }
 
 .folderItem[data-dragging],
@@ -508,6 +535,19 @@
 .section[data-busy] {
   opacity: 0.5;
   pointer-events: none;
+}
+
+@media (max-width: 599px) {
+  .headActions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .headActions > button {
+    padding-inline: 6px;
+    letter-spacing: 0.06em;
+  }
 }
 
 .headRow {
@@ -889,11 +929,14 @@
   transition: opacity 0.12s, transform 0.12s;
 }
 
-.tileButton:hover::after,
-.tileButton:focus-visible::after {
-  opacity: 1;
-  transform: none;
-  transition-delay: 0.25s;
+/* Touch screens have no hover, and a tapped button would keep its tooltip stuck on. */
+@media (hover: hover) {
+  .tileButton:hover::after,
+  .tileButton:focus-visible::after {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.25s;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -960,7 +1003,7 @@
 
 .toast {
   position: fixed;
-  bottom: 24px;
+  bottom: calc(16px + var(--a-tabbar) + env(safe-area-inset-bottom));
   left: 50%;
   z-index: 50;
   display: inline-flex;

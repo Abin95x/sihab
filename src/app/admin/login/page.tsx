@@ -21,8 +21,8 @@ export default function LoginPage() {
         </div>
         {!isAdminConfigured() && (
           <p className={styles.alert}>
-            Login is disabled until <code>ADMIN_USERNAME</code>, <code>ADMIN_PASSWORD</code> and{" "}
-            <code>AUTH_SECRET</code> (32+ characters) are set.
+            Login is disabled until <code>DATABASE_URL</code> and <code>AUTH_SECRET</code> (32+ characters) are set.
+            Then create an account with <code>npm run admin:create -- &lt;username&gt;</code>.
           </p>
         )}
         <LoginForm />

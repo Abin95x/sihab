@@ -86,7 +86,7 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
         </Link>
         <div className={styles.headRow}>
           <h1>{shoot.title}</h1>
-          <div className={styles.row}>
+          <div className={`${styles.row} ${styles.headActions}`}>
             <button
               type="button"
               className={styles.secondary}

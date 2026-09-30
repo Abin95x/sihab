@@ -130,6 +130,13 @@ button {
   text-decoration: none;
 }
 
+/* The name is small on phones; give it a full-height tap target without changing how it looks. */
+.site-name {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .site-footer a:hover,
 .site-name:hover {
   color: var(--ink);
@@ -297,6 +304,13 @@ button {
   text-decoration: none;
   color: rgba(0, 0, 0, 0.45);
   transition: color 0.2s;
+}
+
+/* More room between menu links for fingers. */
+@media (pointer: coarse) {
+  .site-menu a {
+    padding-block: 8px;
+  }
 }
 
 .site-menu a[aria-current="page"] {

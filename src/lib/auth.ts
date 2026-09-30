@@ -1,19 +1,20 @@
 import "server-only";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
+import { getDb, isDbConfigured } from "./db";
+import { admins } from "./db/schema";
+import { isUuid } from "./photos";
 
 export const SESSION_COOKIE = "sihab_admin";
 const SESSION_SECONDS = 60 * 60 * 24 * 7;
 
+/** Login needs the signing secret and the database that holds the admin accounts. */
 export function isAdminConfigured() {
-  return Boolean(
-    process.env.ADMIN_USERNAME &&
-      process.env.ADMIN_PASSWORD &&
-      process.env.AUTH_SECRET &&
-      process.env.AUTH_SECRET.length >= 32,
-  );
+  return Boolean(process.env.AUTH_SECRET && process.env.AUTH_SECRET.length >= 32 && isDbConfigured());
 }
 
 function secretKey() {
@@ -24,32 +25,15 @@ function secretKey() {
   return new TextEncoder().encode(secret);
 }
 
-function sha256(value: string) {
-  return createHash("sha256").update(value).digest();
+// Changes whenever the admin's password changes, which invalidates their existing sessions.
+function sessionVersion(passwordHash: string) {
+  return createHash("sha256").update(passwordHash).digest("base64url").slice(0, 16);
 }
 
-function safeEqual(a: string, b: string) {
-  return timingSafeEqual(sha256(a), sha256(b));
-}
-
-// Changes whenever the admin credentials change, which invalidates existing sessions.
-function credentialsVersion() {
-  return sha256(`${process.env.ADMIN_USERNAME}:${process.env.ADMIN_PASSWORD}`).toString("base64url").slice(0, 16);
-}
-
-export function checkCredentials(username: string, password: string) {
-  const expectedUser = process.env.ADMIN_USERNAME;
-  const expectedPassword = process.env.ADMIN_PASSWORD;
-  if (!expectedUser || !expectedPassword) return false;
-  const userOk = safeEqual(username, expectedUser);
-  const passwordOk = safeEqual(password, expectedPassword);
-  return userOk && passwordOk;
-}
-
-export async function createSession(username: string) {
-  const token = await new SignJWT({ role: "admin", v: credentialsVersion() })
+export async function createSession(admin: { id: string; passwordHash: string }) {
+  const token = await new SignJWT({ role: "admin", v: sessionVersion(admin.passwordHash) })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(username)
+    .setSubject(admin.id)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_SECONDS}s`)
     .sign(secretKey());
@@ -67,21 +51,40 @@ export async function destroySession() {
   (await cookies()).delete(SESSION_COOKIE);
 }
 
-export async function getSession(): Promise<{ username: string } | null> {
-  return verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
-}
+export type Session = { id: string; username: string };
 
-/** Also used by src/proxy.ts, which reads the cookie from the request instead of next/headers. */
-export async function verifySessionToken(token: string | undefined): Promise<{ username: string } | null> {
-  if (!token) return null;
+/**
+ * Checks a session cookie: signature, expiry, and that the admin still exists with the same password.
+ * Also used by src/proxy.ts, which reads the cookie from the request instead of next/headers.
+ */
+export async function verifySession(token: string | undefined): Promise<Session | null> {
+  if (!token || !isAdminConfigured()) return null;
+  let adminId: string;
+  let version: string;
   try {
     const { payload } = await jwtVerify(token, secretKey(), { algorithms: ["HS256"] });
-    if (payload.role !== "admin" || payload.v !== credentialsVersion() || !payload.sub) return null;
-    return { username: payload.sub };
+    if (payload.role !== "admin" || typeof payload.v !== "string" || !isUuid(payload.sub)) return null;
+    adminId = payload.sub;
+    version = payload.v;
   } catch {
     return null;
   }
+  try {
+    const [admin] = await getDb()
+      .select({ id: admins.id, username: admins.username, passwordHash: admins.passwordHash })
+      .from(admins)
+      .where(eq(admins.id, adminId))
+      .limit(1);
+    if (!admin || sessionVersion(admin.passwordHash) !== version) return null;
+    return { id: admin.id, username: admin.username };
+  } catch (error) {
+    console.error("[sihab] Failed to check the admin session", error);
+    return null;
+  }
 }
+
+/** The signed-in admin, or null. Cached per request, so several checks cost one query. */
+export const getSession = cache(async () => verifySession((await cookies()).get(SESSION_COOKIE)?.value));
 
 /** Use at the top of every admin page and Server Action. */
 export async function requireAdmin() {

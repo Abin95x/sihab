@@ -12,11 +12,18 @@ export function LoginForm() {
     <form onSubmit={onSubmit} className={styles.form}>
       <label className={styles.field}>
         <span>Username</span>
-<input name="username" autoComplete="username" required autoCapitalize="none" spellCheck={false} />
+        <input
+          name="username"
+          autoComplete="username"
+          required
+          maxLength={64}
+          autoCapitalize="none"
+          spellCheck={false}
+        />
       </label>
       <label className={styles.field}>
         <span>Password</span>
-        <input name="password" type="password" autoComplete="current-password" required />
+        <input name="password" type="password" autoComplete="current-password" required maxLength={256} />
       </label>
       {state.error && (
         <p className={styles.error} role="alert">

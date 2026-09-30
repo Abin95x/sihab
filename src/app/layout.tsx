@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Libre_Caslon_Text, Roboto_Condensed } from "next/font/google";
+import { connection } from "next/server";
 import { site } from "@/lib/site";
 import "./globals.css";
 
@@ -22,7 +23,10 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Render every page per request so Next.js can stamp the CSP nonce from src/proxy.ts on its scripts.
+  // Prerendered pages would have no nonce and their scripts would be blocked.
+  await connection();
   return (
     <html lang="en" className={`${inter.variable} ${condensed.variable} ${serif.variable}`}>
       <body suppressHydrationWarning>{children}</body>
