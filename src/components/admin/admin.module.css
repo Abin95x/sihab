@@ -828,6 +828,32 @@
   border-color: var(--a-ink);
 }
 
+/* Validation: red outline on the input, its label in red, and the message underneath. */
+.field:has([aria-invalid="true"]) > label {
+  color: var(--a-danger);
+}
+
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: var(--a-danger);
+}
+
+.field input[aria-invalid="true"]:focus-visible,
+.field textarea[aria-invalid="true"]:focus-visible {
+  border-color: var(--a-danger);
+  box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.14);
+}
+
+.fieldError {
+  margin: -2px 0 0;
+  color: var(--a-danger);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 1.4;
+  text-transform: none;
+}
+
 /* Password input with a show/hide toggle inside its right edge. */
 .passwordWrap {
   position: relative;

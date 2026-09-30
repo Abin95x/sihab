@@ -22,6 +22,9 @@
 
 # misc
 .DS_Store
+# stray screenshots from browser testing
+/*.png
+.playwright-mcp/
 *.pem
 
 # debug

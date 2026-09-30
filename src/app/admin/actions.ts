@@ -13,15 +13,28 @@ import { processImage } from "@/lib/images";
 import { isSection, isUuid, type Section } from "@/lib/photos";
 import { clientIp } from "@/lib/memory-rate-limit";
 import { burnPasswordCheck, verifyPassword } from "@/lib/password";
-import { consume, lockedFor, recordFailure, reset } from "@/lib/rate-limit";
+import { consume, recordAttempt, reset } from "@/lib/rate-limit";
 import { deletePhotoFiles, isStorageConfigured, putPhotoFiles } from "@/lib/storage";
-import { isBoolean, normalizeUsername, PASSWORD_MAX, readText } from "@/lib/validation";
+import {
+  type FieldErrors,
+  isBoolean,
+  loginFieldErrors,
+  normalizeUsername,
+  PASSWORD_MAX,
+  readStoryFields,
+  readText,
+} from "@/lib/validation";
 
-export type ActionResult = { ok?: boolean; error?: string; id?: string };
+export type ActionResult = {
+  ok?: boolean;
+  /** A message for the whole form. */
+  error?: string;
+  /** Messages for single inputs, keyed by field name. */
+  fieldErrors?: FieldErrors;
+  id?: string;
+};
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
-const MAX_TITLE = 200;
-const MAX_DESCRIPTION = 5000;
 const MAX_REORDER = 1000;
 
 // The homepage is included because any photo may be starred to appear there.
@@ -64,11 +77,10 @@ function lockedOut(seconds: number): ActionResult {
   return { error: `Too many failed attempts. Sign-in is locked for ${minutes} minute${minutes === 1 ? "" : "s"}.` };
 }
 
-/** Counts a wrong password against this address and says how many tries are left, or that it is now locked. */
-async function failedLogin(ipKey: string): Promise<ActionResult> {
-  const { failuresLeft, lockedForSeconds } = await recordFailure(ipKey, LOGIN_LOCKOUT);
-  if (lockedForSeconds) return lockedOut(lockedForSeconds);
-  const tries = `${failuresLeft} attempt${failuresLeft === 1 ? "" : "s"} left`;
+/** The message for a wrong password: how many tries this address has left, or that it is now locked. */
+function failedLogin({ attemptsLeft, lockedForSeconds }: { attemptsLeft: number; lockedForSeconds: number }): ActionResult {
+  if (attemptsLeft === 0) return lockedOut(lockedForSeconds);
+  const tries = `${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} left`;
   return { error: `Incorrect username or password. ${tries} before sign-in is locked for 30 minutes.` };
 }
 
@@ -76,6 +88,9 @@ export async function login(_prev: ActionResult, formData: FormData): Promise<Ac
   if (!isAdminConfigured()) {
     return { error: "Admin login is not configured. Set DATABASE_URL and AUTH_SECRET (32+ characters)." };
   }
+
+  const emptyFields = loginFieldErrors(formData);
+  if (emptyFields) return { fieldErrors: emptyFields };
 
   const username = normalizeUsername(formData.get("username"));
   const password = formData.get("password");
@@ -85,19 +100,21 @@ export async function login(_prev: ActionResult, formData: FormData): Promise<Ac
 
   const ipKey = `login:fail:ip:${clientIp(await headers())}`;
   const userKey = `login:user:${username}`;
-  let ipLockedFor: number;
+  let ipAttempt: Awaited<ReturnType<typeof recordAttempt>>;
   let userLimit: Awaited<ReturnType<typeof consume>>;
   try {
-    [ipLockedFor, userLimit] = await Promise.all([
-      lockedFor(ipKey, LOGIN_LOCKOUT),
+    // Both counters go up atomically *before* the password is checked. Checking first and counting only
+    // after a failure would let a burst of parallel requests all pass the check before any was counted.
+    [ipAttempt, userLimit] = await Promise.all([
+      recordAttempt(ipKey, LOGIN_LOCKOUT),
       consume(userKey, LOGIN_LIMIT_PER_USER),
     ]);
   } catch (error) {
-    console.error("[sihab] Login rate limit check failed", error);
-    return { error: "Sign-in is unavailable right now. Check the database connection and that `npm run db:push` has run." };
+    console.error("[sihab] Login rate limit check failed (is the database reachable and `npm run db:push` run?)", error);
+    return { error: "Sign-in is unavailable right now. Try again later." };
   }
-  // Checked before the password, so a locked-out address learns nothing from further guesses.
-  if (ipLockedFor) return lockedOut(ipLockedFor);
+  // Refused before the password is checked, so a locked-out address learns nothing from further guesses.
+  if (!ipAttempt.allowed) return lockedOut(ipAttempt.lockedForSeconds);
   if (!userLimit.allowed) return lockedOut(userLimit.retryAfterSeconds);
 
   const db = getDb();
@@ -108,11 +125,11 @@ export async function login(_prev: ActionResult, formData: FormData): Promise<Ac
     .limit(1);
   if (!admin) {
     await burnPasswordCheck(password);
-    return failedLogin(ipKey);
+    return failedLogin(ipAttempt);
   }
-  if (!(await verifyPassword(password, admin.passwordHash))) return failedLogin(ipKey);
+  if (!(await verifyPassword(password, admin.passwordHash))) return failedLogin(ipAttempt);
 
-  // A successful sign-in clears this IP's failures; the per-username budget runs out on its own.
+  // A successful sign-in clears this IP's attempts; the per-username budget runs out on its own.
   await Promise.all([
     reset(ipKey),
     db.update(admins).set({ lastLoginAt: new Date() }).where(eq(admins.id, admin.id)),
@@ -262,15 +279,6 @@ export async function reorderPhotos(storyId: string, ids: string[]): Promise<Act
 
 // ---------- Stories (editorial / commercial) ----------
 
-function readStoryFields(formData: FormData) {
-  const title = readText(formData.get("title") ?? "", MAX_TITLE);
-  const description = readText(formData.get("description") ?? "", MAX_DESCRIPTION, { multiline: true });
-  if (title === null) return { error: `Title must be under ${MAX_TITLE} characters.` } as const;
-  if (!title) return { error: "Title is required." } as const;
-  if (description === null) return { error: `Description must be under ${MAX_DESCRIPTION} characters.` } as const;
-  return { title, description } as const;
-}
-
 export async function createStory(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireAdmin();
   if (!isDbConfigured()) return DB_MISSING;
@@ -278,7 +286,7 @@ export async function createStory(_prev: ActionResult, formData: FormData): Prom
   const section = formData.get("section");
   if (!isSection(section)) return { error: "Choose Editorial or Commercial." };
   const fields = readStoryFields(formData);
-  if ("error" in fields) return fields;
+  if (fields.fieldErrors) return { fieldErrors: fields.fieldErrors };
 
   const db = getDb();
   // New stories go to the top of the page.
@@ -302,7 +310,7 @@ export async function updateStory(_prev: ActionResult, formData: FormData): Prom
   const id = formData.get("id");
   if (!isUuid(id)) return { error: "Unknown story." };
   const fields = readStoryFields(formData);
-  if ("error" in fields) return fields;
+  if (fields.fieldErrors) return { fieldErrors: fields.fieldErrors };
 
   const [updated] = await getDb()
     .update(stories)

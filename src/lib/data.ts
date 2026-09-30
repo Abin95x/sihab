@@ -20,6 +20,18 @@ const STORIES_PAGE_SIZE = 3;
 
 type Range = { offset?: number; limit?: number };
 
+/** The furthest a public list can be paged into. Far beyond any real portfolio. */
+const MAX_OFFSET = 5000;
+
+/**
+ * Whether `offset` is one a real visitor can reach: a multiple of the page size, since each page's
+ * nextOffset is the last plus the page size. Anything else is refused, so nobody can fill the data cache
+ * (which is keyed by offset) with arbitrary slices.
+ */
+function isPageOffset(offset: number, pageSize: number) {
+  return Number.isSafeInteger(offset) && offset >= 0 && offset <= MAX_OFFSET && offset % pageSize === 0;
+}
+
 /** Turns rows fetched with `limit + 1` into a page: the extra row only signals that more exist. */
 function toPage<T>(rows: T[], offset: number, limit: number): Page<T> {
   return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
@@ -125,7 +137,7 @@ const EMPTY_PAGE: Page<never> = { items: [], nextOffset: null };
 /** One slice of the homepage photos, starting at `offset`. */
 export async function getHomePhotos(offset = 0): Promise<Page<PhotoMeta>> {
   await connection();
-  if (!isDbConfigured()) return EMPTY_PAGE;
+  if (!isDbConfigured() || !isPageOffset(offset, HOME_PAGE_SIZE)) return EMPTY_PAGE;
   try {
     return toPage(await cachedHomePhotos(offset), offset, HOME_PAGE_SIZE);
   } catch (error) {
@@ -140,7 +152,7 @@ export async function getHomePhotos(offset = 0): Promise<Page<PhotoMeta>> {
  */
 export async function getStories(section: Section, offset = 0, search = ""): Promise<Page<StoryWithPhotos>> {
   await connection();
-  if (!isDbConfigured()) return EMPTY_PAGE;
+  if (!isDbConfigured() || !isPageOffset(offset, STORIES_PAGE_SIZE)) return EMPTY_PAGE;
   try {
     const rows = search
       ? await queryStories(section, { offset, limit: STORIES_PAGE_SIZE + 1, search })

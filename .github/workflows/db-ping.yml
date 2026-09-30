@@ -7,6 +7,9 @@ on:
     - cron: "0 3 * * *" # daily, 03:00 UTC
   workflow_dispatch:
 
+# The job only reads a secret; its GitHub token needs no access to the repository.
+permissions: {}
+
 jobs:
   ping:
     runs-on: ubuntu-latest

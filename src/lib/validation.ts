@@ -39,3 +39,34 @@ export function readSearch(value: unknown): string {
   if (typeof raw !== "string") return "";
   return readText(raw.slice(0, SEARCH_MAX * 2), Infinity)?.slice(0, SEARCH_MAX).trim() ?? "";
 }
+
+/** Error messages keyed by form field name, shown under each input. */
+export type FieldErrors = Partial<Record<string, string>>;
+
+export const TITLE_MAX = 200;
+export const DESCRIPTION_MAX = 5000;
+
+/**
+ * Validates a story's title and description. Runs in the browser before submitting (so mistakes show
+ * instantly) and again in the Server Action (which is what actually protects the data).
+ */
+export function readStoryFields(
+  formData: FormData,
+): { title: string; description: string; fieldErrors?: undefined } | { fieldErrors: FieldErrors } {
+  const title = readText(formData.get("title") ?? "", TITLE_MAX);
+  const description = readText(formData.get("description") ?? "", DESCRIPTION_MAX, { multiline: true });
+  const fieldErrors: FieldErrors = {};
+  if (title === null) fieldErrors.title = `Keep the title under ${TITLE_MAX} characters.`;
+  else if (!title) fieldErrors.title = "Title is required.";
+  if (description === null) fieldErrors.description = `Keep the description under ${DESCRIPTION_MAX} characters.`;
+  if (title === null || !title || description === null) return { fieldErrors };
+  return { title, description };
+}
+
+/** Empty-field checks for the sign-in form. Wrong credentials are reported separately, for both fields at once. */
+export function loginFieldErrors(formData: FormData): FieldErrors | null {
+  const fieldErrors: FieldErrors = {};
+  if (!String(formData.get("username") ?? "").trim()) fieldErrors.username = "Enter your username.";
+  if (!formData.get("password")) fieldErrors.password = "Enter your password.";
+  return Object.keys(fieldErrors).length > 0 ? fieldErrors : null;
+}

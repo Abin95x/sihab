@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type SubmitEvent } from "react";
 import { deleteStory, setStoryArchived, updateStory } from "@/app/admin/actions";
 import type { Section, StoryWithPhotos } from "@/lib/photos";
+import { DESCRIPTION_MAX, readStoryFields, TITLE_MAX } from "@/lib/validation";
 import { AdminPhotoGrid } from "./admin-photo-grid";
 import styles from "./admin.module.css";
+import { Field, focusFirstError, useFieldErrors } from "./field";
 import { LinkPending } from "./link-pending";
 import { Spinner } from "./spinner";
 import { AddPhotosTile, UploadErrors, usePhotoUpload } from "./upload-dropzone";
@@ -21,6 +23,7 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
   const [archiving, startArchive] = useTransition();
   const [deleting, startDelete] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const fields = useFieldErrors();
   const { confirm, dialog } = useConfirm();
   const uploader = usePhotoUpload(section, shoot.id);
   const count = shoot.photos.length;
@@ -29,13 +32,28 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
 
   function save(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     setError(null);
+    const checked = readStoryFields(formData);
+    if (checked.fieldErrors) {
+      fields.setErrors(checked.fieldErrors);
+      focusFirstError(form, checked.fieldErrors);
+      return;
+    }
     startSave(async () => {
       const result = await updateStory({}, formData);
-      if (result.error) setError(result.error);
+      if (result.fieldErrors) {
+        fields.setErrors(result.fieldErrors);
+        focusFirstError(form, result.fieldErrors);
+      } else if (result.error) setError(result.error);
       else setEditing(false);
     });
+  }
+
+  function closeEditor() {
+    setEditing(false);
+    fields.setErrors({});
   }
 
   function toggleArchived() {
@@ -88,7 +106,7 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
         <div className={styles.headRow}>
           <h1>{shoot.title}</h1>
           <div className={styles.headActions}>
-            <IconAction label="Edit details" pressed={editing} onClick={() => setEditing((open) => !open)}>
+            <IconAction label="Edit details" pressed={editing} onClick={() => (editing ? closeEditor() : setEditing(true))}>
               <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />
             </IconAction>
             <IconAction
@@ -127,22 +145,38 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
       )}
 
       {editing && (
-        <form onSubmit={save} className={`${styles.form} ${styles.card}`}>
+        <form onSubmit={save} className={`${styles.form} ${styles.card}`} noValidate>
           <input type="hidden" name="id" value={shoot.id} />
-          <label className={styles.field}>
-            <span>Title</span>
-            <input name="title" required maxLength={200} defaultValue={shoot.title} />
-          </label>
-          <label className={styles.field}>
-            <span>Description</span>
-            <textarea name="description" rows={3} maxLength={5000} defaultValue={shoot.description} />
-          </label>
+          <Field label="Title" error={fields.errors.title}>
+            {(control) => (
+              <input
+                {...control}
+                name="title"
+                required
+                maxLength={TITLE_MAX}
+                defaultValue={shoot.title}
+                onInput={() => fields.clear("title")}
+              />
+            )}
+          </Field>
+          <Field label="Description" error={fields.errors.description}>
+            {(control) => (
+              <textarea
+                {...control}
+                name="description"
+                rows={3}
+                maxLength={DESCRIPTION_MAX}
+                defaultValue={shoot.description}
+                onInput={() => fields.clear("description")}
+              />
+            )}
+          </Field>
           <div className={styles.row}>
             <button type="submit" className={styles.primary} disabled={saving}>
               {saving && <Spinner />}
               {saving ? "Saving…" : "Save"}
             </button>
-            <button type="button" className={styles.secondary} onClick={() => setEditing(false)} disabled={saving}>
+            <button type="button" className={styles.secondary} onClick={closeEditor} disabled={saving}>
               Cancel
             </button>
           </div>
