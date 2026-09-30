@@ -31,3 +31,12 @@ export function normalizeUsername(value: unknown): string | null {
 export function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
+
+export const SEARCH_MAX = 100;
+
+/** A search query from the URL (`?q=`): plain text, at most SEARCH_MAX characters, "" when absent. */
+export function readSearch(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== "string") return "";
+  return readText(raw.slice(0, SEARCH_MAX * 2), Infinity)?.slice(0, SEARCH_MAX).trim() ?? "";
+}

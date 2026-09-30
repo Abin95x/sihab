@@ -15,7 +15,16 @@ type Tile = PhotoMeta & { busy?: Busy };
 type Change = { id: string; busy?: Busy; archived?: boolean; featured?: boolean } | { order: string[] };
 
 /** Photos with star, archive and delete buttons. Pass `storyId` to allow drag-and-drop reordering. */
-export function AdminPhotoGrid({ photos, storyId }: { photos: PhotoMeta[]; storyId?: string }) {
+type Props = {
+  photos: PhotoMeta[];
+  /** Allows drag-and-drop reordering within this story. */
+  storyId?: string;
+  /** Shown as the first cell of the grid, before the photos (the "Add photos" card). */
+  addTile?: React.ReactNode;
+};
+
+/** Photos with star, archive and delete buttons. */
+export function AdminPhotoGrid({ photos, storyId, addTile }: Props) {
   const dndId = useId();
   const sensors = useSortSensors();
   const dragGuard = useDragGuard();
@@ -33,7 +42,7 @@ export function AdminPhotoGrid({ photos, storyId }: { photos: PhotoMeta[]; story
     );
   });
 
-  if (photos.length === 0) {
+  if (photos.length === 0 && !addTile) {
     return <p className={styles.empty}>No photos yet.</p>;
   }
 
@@ -107,6 +116,7 @@ export function AdminPhotoGrid({ photos, storyId }: { photos: PhotoMeta[]; story
       >
         <SortableContext items={tiles.map((p) => p.id)} strategy={rectSortingStrategy} disabled={!storyId}>
           <ul className={styles.grid}>
+            {addTile}
             {tiles.map((photo, i) => (
               <PhotoTile
                 key={photo.id}

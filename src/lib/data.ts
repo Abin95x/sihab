@@ -1,11 +1,11 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { connection } from "next/server";
 import { getDb, isDbConfigured } from "./db";
 import { demoHomePhotos, demoStories } from "./demo";
 import { photos, stories } from "./db/schema";
-import type { PhotoMeta, Section, StoryWithPhotos } from "./photos";
+import type { Page, PhotoMeta, Section, StoryWithPhotos } from "./photos";
 
 const photoMeta = {
   id: photos.id,
@@ -18,9 +18,6 @@ const photoMeta = {
 /** How many items the public pages load at a time as the visitor scrolls. */
 export const HOME_PAGE_SIZE = 12;
 export const STORIES_PAGE_SIZE = 3;
-
-/** One slice of a list. `nextOffset` is where the following slice starts, or null at the end. */
-export type Page<T> = { items: T[]; nextOffset: number | null };
 
 type Range = { offset?: number; limit?: number };
 
@@ -43,13 +40,24 @@ export async function queryHomePhotos({ offset = 0, limit }: Range = {}): Promis
   return limit === undefined ? query : query.limit(limit).offset(offset);
 }
 
+/** ILIKE pattern matching `text` anywhere, with its own `%`, `_` and `\` taken literally. */
+function containsPattern(text: string) {
+  return `%${text.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
 /**
  * Stories in a section, with their photos. Archived stories and photos are left out unless `includeArchived`
  * is set (admin only). Pass `limit` to fetch one slice of stories; photos are only loaded for that slice.
+ * `search` keeps only stories whose title or description contains it, ignoring case.
  */
 export async function queryStories(
   section: Section,
-  { includeArchived = false, offset = 0, limit }: { includeArchived?: boolean } & Range = {},
+  {
+    includeArchived = false,
+    offset = 0,
+    limit,
+    search,
+  }: { includeArchived?: boolean; search?: string } & Range = {},
 ): Promise<StoryWithPhotos[]> {
   const db = getDb();
   const storyQuery = db
@@ -60,7 +68,15 @@ export async function queryStories(
       archived: sql<boolean>`${stories.archivedAt} is not null`,
     })
     .from(stories)
-    .where(and(eq(stories.section, section), includeArchived ? undefined : isNull(stories.archivedAt)))
+    .where(
+      and(
+        eq(stories.section, section),
+        includeArchived ? undefined : isNull(stories.archivedAt),
+        search
+          ? or(ilike(stories.title, containsPattern(search)), ilike(stories.description, containsPattern(search)))
+          : undefined,
+      ),
+    )
     .orderBy(asc(stories.sortOrder), desc(stories.createdAt), asc(stories.id));
   const storyRows = await (limit === undefined ? storyQuery : storyQuery.limit(limit).offset(offset));
   if (storyRows.length === 0) return [];
@@ -92,12 +108,13 @@ export const CONTENT_TAG = "content";
 const CACHE = { tags: [CONTENT_TAG], revalidate: 86400 };
 const cachedHomePhotos = unstable_cache(
   (offset: number) => queryHomePhotos({ offset, limit: HOME_PAGE_SIZE + 1 }),
-  ["home-photos-page"],
+  // The page size is part of the key so changing it can't serve slices cached at the old size.
+  ["home-photos-page", String(HOME_PAGE_SIZE)],
   CACHE,
 );
 const cachedStories = unstable_cache(
   (section: Section, offset: number) => queryStories(section, { offset, limit: STORIES_PAGE_SIZE + 1 }),
-  ["stories-page"],
+  ["stories-page", String(STORIES_PAGE_SIZE)],
   CACHE,
 );
 
@@ -118,14 +135,24 @@ export async function getHomePhotos(offset = 0): Promise<Page<PhotoMeta>> {
   }
 }
 
-/** One slice of a section's stories, starting at `offset`. */
-export async function getStories(section: Section, offset = 0): Promise<Page<StoryWithPhotos>> {
+/**
+ * One slice of a section's stories, starting at `offset`. With `search`, only the stories whose title or
+ * description contains it. Searches skip the cache: each distinct query would otherwise add a cache entry.
+ */
+export async function getStories(section: Section, offset = 0, search = ""): Promise<Page<StoryWithPhotos>> {
   await connection();
   if (!isDbConfigured()) {
-    return toPage(demoStories[section].slice(offset, offset + STORIES_PAGE_SIZE + 1), offset, STORIES_PAGE_SIZE);
+    const needle = search.toLowerCase();
+    const matches = search
+      ? demoStories[section].filter((s) => `${s.title}\n${s.description}`.toLowerCase().includes(needle))
+      : demoStories[section];
+    return toPage(matches.slice(offset, offset + STORIES_PAGE_SIZE + 1), offset, STORIES_PAGE_SIZE);
   }
   try {
-    return toPage(await cachedStories(section, offset), offset, STORIES_PAGE_SIZE);
+    const rows = search
+      ? await queryStories(section, { offset, limit: STORIES_PAGE_SIZE + 1, search })
+      : await cachedStories(section, offset);
+    return toPage(rows, offset, STORIES_PAGE_SIZE);
   } catch (error) {
     console.error(`[sihab] Failed to load ${section} stories`, error);
     return EMPTY_PAGE;

@@ -10,10 +10,15 @@ import styles from "./admin.module.css";
 import { LinkPending } from "./link-pending";
 import { movedIds, SavingOrder, sortByIds, useDragGuard, useSortableItem, useSortSensors } from "./sortable";
 
-type Props = { section: Section; shoots: StoryWithPhotos[] };
+type Props = {
+  section: Section;
+  shoots: StoryWithPhotos[];
+  /** False while the list is filtered by a search: a partial list can't be reordered meaningfully. */
+  reorderable?: boolean;
+};
 
 /** Shoots shown as folders. Drag a folder to change the order of shoots on the site. */
-export function ShootFolders({ section, shoots }: Props) {
+export function ShootFolders({ section, shoots, reorderable = true }: Props) {
   const dndId = useId();
   const sensors = useSortSensors();
   const dragGuard = useDragGuard();
@@ -54,7 +59,13 @@ export function ShootFolders({ section, shoots }: Props) {
         <SortableContext items={items.map((s) => s.id)} strategy={rectSortingStrategy}>
           <ul className={styles.folders}>
             {items.map((shoot) => (
-              <Folder key={shoot.id} section={section} shoot={shoot} dragGuard={dragGuard.ref} />
+              <Folder
+                key={shoot.id}
+                section={section}
+                shoot={shoot}
+                dragGuard={dragGuard.ref}
+                reorderable={reorderable}
+              />
             ))}
           </ul>
         </SortableContext>
@@ -64,10 +75,10 @@ export function ShootFolders({ section, shoots }: Props) {
   );
 }
 
-type FolderProps = { section: Section; shoot: StoryWithPhotos; dragGuard: { current: boolean } };
+type FolderProps = { section: Section; shoot: StoryWithPhotos; dragGuard: { current: boolean }; reorderable: boolean };
 
-function Folder({ section, shoot, dragGuard }: FolderProps) {
-  const sortableProps = useSortableItem(shoot.id, dragGuard);
+function Folder({ section, shoot, dragGuard, reorderable }: FolderProps) {
+  const sortableProps = useSortableItem(shoot.id, dragGuard, !reorderable);
   const count = shoot.photos.length;
   const archived = shoot.photos.filter((p) => p.archived).length;
 

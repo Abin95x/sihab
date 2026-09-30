@@ -5,21 +5,18 @@ import { uploadPhoto } from "@/app/admin/actions";
 import type { Section } from "@/lib/photos";
 import styles from "./admin.module.css";
 import { prepareForUpload } from "./prepare-upload";
+import { Spinner } from "./spinner";
 
-type Props = { section: Section; storyId?: string };
+type Progress = { done: number; total: number };
 
-export function UploadDropzone({ section, storyId }: Props) {
-  const inputId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
+/** Uploads images one at a time into a story, tracking progress and collecting per-file errors. */
+export function usePhotoUpload(section: Section, storyId: string) {
   const [pending, startTransition] = useTransition();
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<Progress | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
-  const [dragging, setDragging] = useState(false);
 
-  function upload(list: FileList | null) {
-    const files = Array.from(list ?? []).filter(
-      (f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name),
-    );
+  function upload(list: FileList | null, onDone?: () => void) {
+    const files = Array.from(list ?? []).filter((f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
     if (files.length === 0 || pending) return;
 
     setErrors([]);
@@ -30,7 +27,7 @@ export function UploadDropzone({ section, storyId }: Props) {
         try {
           const body = new FormData();
           body.set("section", section);
-          if (storyId) body.set("storyId", storyId);
+          body.set("storyId", storyId);
           body.set("file", await prepareForUpload(file), file.name);
           const result = await uploadPhoto(body);
           if (result.error) failed.push(result.error);
@@ -41,18 +38,34 @@ export function UploadDropzone({ section, storyId }: Props) {
       }
       setErrors(failed);
       setProgress(null);
-      if (inputRef.current) inputRef.current.value = "";
+      onDone?.();
     });
   }
 
+  return { upload, pending, progress, errors };
+}
+
+export type PhotoUpload = ReturnType<typeof usePhotoUpload>;
+
+/** The "Add photos" card at the start of the photo grid: click to choose files, or drop them on it. */
+export function AddPhotosTile({ uploader }: { uploader: PhotoUpload }) {
+  const { upload, pending, progress } = uploader;
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const clearInput = () => {
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
   return (
-    <div>
+    <li className={styles.addTile}>
       <label
         htmlFor={inputId}
-        className={styles.dropzone}
+        className={styles.addTileLabel}
         data-dragging={dragging || undefined}
         data-busy={pending || undefined}
         onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
           setDragging(true);
         }}
@@ -71,30 +84,46 @@ export function UploadDropzone({ section, storyId }: Props) {
           multiple
           disabled={pending}
           className="visually-hidden"
-          onChange={(e) => upload(e.currentTarget.files)}
+          onChange={(e) => upload(e.currentTarget.files, clearInput)}
         />
-        <span className={styles.dropzoneIcon} aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22">
-            <path d="M12 16V4m0 0-5 5m5-5 5 5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
-        <span className={styles.dropzoneTitle}>
-          {progress ? `Uploading ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : "Add photos"}
-        </span>
-        <span className={styles.hint}>
-          {progress ? "Keep this page open until it finishes." : "Tap to choose, or drop images here. JPEG, PNG, WebP or AVIF."}
-        </span>
-        {progress && (
-          <progress className={styles.progress} max={progress.total} value={progress.done} aria-label="Upload progress" />
+        {progress ? (
+          <>
+            <Spinner size={22} />
+            <span className={styles.addTileTitle} aria-live="polite">
+              Uploading {Math.min(progress.done + 1, progress.total)} of {progress.total}
+            </span>
+            <progress
+              className={styles.progress}
+              max={progress.total}
+              value={progress.done}
+              aria-label="Upload progress"
+            />
+            <span className={styles.addTileHint}>Keep this page open</span>
+          </>
+        ) : (
+          <>
+            <span className={styles.addTileIcon} aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span className={styles.addTileTitle}>Add photos</span>
+            <span className={styles.addTileHint}>Choose or drop images</span>
+          </>
         )}
       </label>
-      {errors.length > 0 && (
-        <ul className={styles.errorList} role="alert">
-          {errors.map((message, i) => (
-            <li key={i}>{message}</li>
-          ))}
-        </ul>
-      )}
-    </div>
+    </li>
+  );
+}
+
+/** Messages for files that failed to upload, shown above the grid. */
+export function UploadErrors({ errors }: { errors: string[] }) {
+  if (errors.length === 0) return null;
+  return (
+    <ul className={styles.errorList} role="alert">
+      {errors.map((message, i) => (
+        <li key={i}>{message}</li>
+      ))}
+    </ul>
   );
 }

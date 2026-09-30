@@ -2,7 +2,7 @@ import { ADMIN_TABS, AdminSidebar, type AdminTabId } from "@/components/admin/ad
 import { AdminPhotoGrid } from "@/components/admin/admin-photo-grid";
 import styles from "@/components/admin/admin.module.css";
 import { NewShootDialog } from "@/components/admin/new-shoot-dialog";
-import { ShootFolders } from "@/components/admin/shoot-folders";
+import { ShootBrowser } from "@/components/admin/shoot-browser";
 import { ShootView } from "@/components/admin/shoot-view";
 import { requireAdmin } from "@/lib/auth";
 import { queryHomePhotos, queryStories } from "@/lib/data";
@@ -33,8 +33,6 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
 
   const activeLabel = ADMIN_TABS.find((t) => t.id === active)!.label;
   const openShoot = active !== "home" && typeof shoot === "string" ? stories.find((s) => s.id === shoot) : undefined;
-  const liveShoots = stories.filter((s) => !s.archived);
-  const archivedShoots = stories.filter((s) => s.archived);
 
   return (
     <div className={styles.shell}>
@@ -68,24 +66,10 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                 <NewShootDialog section={active} />
               </div>
               <p className={styles.hint}>
-                Each shoot is a folder of photos. Open one to add or remove photos, or drag folders to reorder them.
+                Each shoot is a folder of photos. Open one to add or remove photos, or drag folders to reorder them (clear the search first).
               </p>
             </header>
-            {liveShoots.length > 0 ? (
-              <ShootFolders section={active} shoots={liveShoots} />
-            ) : (
-              !loadError && (
-                <p className={styles.empty}>{archivedShoots.length > 0 ? "No active shoots." : "No shoots yet."}</p>
-              )
-            )}
-            {archivedShoots.length > 0 && (
-              <section className={styles.archive} aria-labelledby="archived-shoots">
-                <h2 id="archived-shoots" className={styles.subhead}>
-                  Archived · hidden from the site
-                </h2>
-                <ShootFolders section={active} shoots={archivedShoots} />
-              </section>
-            )}
+            {!loadError && <ShootBrowser section={active} shoots={stories} />}
           </section>
         )}
       </main>

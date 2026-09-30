@@ -25,6 +25,9 @@ export type StoryWithPhotos = {
   archived?: boolean;
 };
 
+/** One slice of a list loaded by infinite scroll. `nextOffset` is where the next slice starts, or null at the end. */
+export type Page<T> = { items: T[]; nextOffset: number | null };
+
 /** Longest edge, in pixels, of the stored full-size image. */
 export const FULL_MAX_EDGE = 2400;
 /** Longest edge, in pixels, of the stored thumbnail used in grids. */

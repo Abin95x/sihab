@@ -376,6 +376,81 @@
   line-height: 1.6;
 }
 
+/* Search box above the shoot folders. */
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 420px;
+}
+
+.searchIcon,
+.searchClear svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--a-muted);
+  pointer-events: none;
+}
+
+.search input {
+  width: 100%;
+  padding: 10px 40px 10px 36px;
+  border: 1px solid var(--a-line-strong);
+  border-radius: var(--a-radius);
+  background: var(--a-bg);
+  font: inherit;
+  font-size: 16px; /* prevents iOS zoom on focus */
+  color: var(--a-ink);
+  transition: border-color 0.15s;
+}
+
+.search input::placeholder {
+  color: #b0b0ae;
+}
+
+.search input:hover {
+  border-color: #a3a3a1;
+}
+
+.search input:focus-visible {
+  outline: none;
+  border-color: var(--a-ink);
+}
+
+/* Our clear button replaces the browser's own. */
+.search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.searchClear {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--a-radius);
+  background: none;
+  color: var(--a-muted);
+  cursor: pointer;
+}
+
+.searchClear:hover,
+.searchClear:focus-visible {
+  color: var(--a-ink);
+}
+
 .empty {
   margin: 0;
   padding: 48px 16px;
@@ -537,16 +612,98 @@
   pointer-events: none;
 }
 
-@media (max-width: 599px) {
-  .headActions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    width: 100%;
-  }
+/* Shoot header: edit, archive and delete as square icon buttons with tooltips. */
+.headActions {
+  display: flex;
+  gap: 8px;
+}
 
-  .headActions > button {
-    padding-inline: 6px;
-    letter-spacing: 0.06em;
+.iconAction {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--a-line-strong);
+  border-radius: var(--a-radius);
+  background: transparent;
+  color: var(--a-ink);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.iconAction:hover {
+  border-color: var(--a-ink);
+}
+
+.iconAction[aria-pressed="true"] {
+  border-color: var(--a-ink);
+  background: var(--a-ink);
+  color: #fff;
+}
+
+.iconActionDanger {
+  color: var(--a-danger);
+}
+
+.iconActionDanger:hover {
+  border-color: var(--a-danger);
+  background: var(--a-danger);
+  color: #fff;
+}
+
+.iconAction:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* Tooltip below the button. Left-aligned so it stays on screen when the buttons wrap to the left edge
+   on phones; the last one is right-aligned for when they sit at the right edge. */
+.iconAction::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 3;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.iconAction:last-child::after {
+  right: 0;
+  left: auto;
+}
+
+@media (hover: hover) {
+  .iconAction:hover::after,
+  .iconAction:focus-visible::after {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.25s;
+  }
+}
+
+@media (pointer: coarse) {
+  .iconAction {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iconAction::after {
+    transform: none;
   }
 }
 
@@ -671,6 +828,49 @@
   border-color: var(--a-ink);
 }
 
+/* Password input with a show/hide toggle inside its right edge. */
+.passwordWrap {
+  position: relative;
+  display: block;
+}
+
+.field .passwordWrap input {
+  padding-right: 44px;
+}
+
+/* Edge draws its own reveal button; ours replaces it. */
+.passwordWrap input::-ms-reveal {
+  display: none;
+}
+
+.reveal {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--a-radius);
+  background: none;
+  color: var(--a-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.reveal:hover,
+.reveal[aria-pressed="true"] {
+  color: var(--a-ink);
+}
+
+.reveal:focus-visible {
+  outline: 2px solid var(--a-ink);
+  outline-offset: -2px;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -745,46 +945,64 @@
 
 /* ---------- Upload ---------- */
 
-.dropzone {
+/* The "Add photos" card: first cell of the photo grid, the same size as a photo. */
+.addTile {
+  aspect-ratio: 4 / 5;
+}
+
+.addTileLabel {
   display: grid;
+  place-content: center;
   justify-items: center;
-  gap: 4px;
-  padding: 32px 16px;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
   border: 1px dashed var(--a-line-strong);
   border-radius: var(--a-radius);
+  color: var(--a-muted);
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 
-.dropzone:hover,
-.dropzone[data-dragging] {
+.addTileLabel:hover,
+.addTileLabel[data-dragging] {
   border-color: var(--a-ink);
   background: var(--a-subtle);
+  color: var(--a-ink);
 }
 
-.dropzone:focus-within {
+.addTileLabel:focus-within {
   outline: 2px solid var(--a-ink);
   outline-offset: 2px;
 }
 
-.dropzone[data-busy] {
+.addTileLabel[data-busy] {
+  border-style: solid;
+  color: var(--a-ink);
   cursor: progress;
 }
 
-.dropzoneIcon {
+/* A plain plus sign, no circle behind it. */
+.addTileIcon {
   display: grid;
-  margin-bottom: 6px;
-  color: var(--a-muted);
+  margin-bottom: 2px;
+  color: var(--a-ink);
 }
 
-.dropzoneTitle {
+.addTileTitle {
+  color: var(--a-ink);
   font-size: 13px;
   font-weight: 600;
 }
 
+.addTileHint {
+  font-size: 11px;
+}
+
 .progress {
-  width: min(100%, 240px);
+  width: min(100%, 140px);
   margin-top: 8px;
   accent-color: var(--a-ink);
 }
