@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { connection } from "next/server";
 import { getDb, isDbConfigured } from "./db";
 import { demoHomePhotos, demoStories } from "./demo";
@@ -11,14 +11,16 @@ const photoMeta = {
   width: photos.width,
   height: photos.height,
   featured: sql<boolean>`${photos.featuredAt} is not null`,
+  archived: sql<boolean>`${photos.archivedAt} is not null`,
 };
 
-/** Starred photos, in the order they were starred. */
+/** Starred photos, in the order they were starred. Archived photos and photos in archived stories are left out. */
 export async function queryHomePhotos(): Promise<PhotoMeta[]> {
   return getDb()
     .select(photoMeta)
     .from(photos)
-    .where(isNotNull(photos.featuredAt))
+    .innerJoin(stories, eq(photos.storyId, stories.id))
+    .where(and(isNotNull(photos.featuredAt), isNull(photos.archivedAt), isNull(stories.archivedAt)))
     .orderBy(asc(photos.featuredAt));
 }
 
@@ -32,19 +34,33 @@ export async function queryStoryOptions(): Promise<StoryOption[]> {
     .orderBy(asc(stories.sortOrder), desc(stories.createdAt));
 }
 
-export async function queryStories(section: Section): Promise<StoryWithPhotos[]> {
+/** Stories in a section. Archived stories and photos are left out unless `includeArchived` is set (admin only). */
+export async function queryStories(
+  section: Section,
+  { includeArchived = false }: { includeArchived?: boolean } = {},
+): Promise<StoryWithPhotos[]> {
   const db = getDb();
   const storyRows = await db
-    .select({ id: stories.id, title: stories.title, description: stories.description })
+    .select({
+      id: stories.id,
+      title: stories.title,
+      description: stories.description,
+      archived: sql<boolean>`${stories.archivedAt} is not null`,
+    })
     .from(stories)
-    .where(eq(stories.section, section))
+    .where(and(eq(stories.section, section), includeArchived ? undefined : isNull(stories.archivedAt)))
     .orderBy(asc(stories.sortOrder), desc(stories.createdAt));
   if (storyRows.length === 0) return [];
 
   const photoRows = await db
     .select({ ...photoMeta, storyId: photos.storyId })
     .from(photos)
-    .where(inArray(photos.storyId, storyRows.map((s) => s.id)))
+    .where(
+      and(
+        inArray(photos.storyId, storyRows.map((s) => s.id)),
+        includeArchived ? undefined : isNull(photos.archivedAt),
+      ),
+    )
     .orderBy(asc(photos.sortOrder), asc(photos.createdAt));
 
   const byStory = new Map<string, PhotoMeta[]>(storyRows.map((s) => [s.id, []]));

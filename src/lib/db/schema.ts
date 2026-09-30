@@ -10,6 +10,8 @@ export const stories = pgTable(
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     sortOrder: integer("sort_order").notNull().default(0),
+    // Archived stories stay in the admin but are hidden from the public site.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("stories_section_order_idx").on(t.section, t.sortOrder)],
@@ -29,6 +31,8 @@ export const photos = pgTable(
     sortOrder: integer("sort_order").notNull().default(0),
     // Set when the photo is starred for the homepage, which lists starred photos in this order.
     featuredAt: timestamp("featured_at", { withTimezone: true }),
+    // Archived photos stay in the admin but are hidden from the public site, including the homepage.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

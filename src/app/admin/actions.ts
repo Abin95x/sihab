@@ -154,6 +154,23 @@ export async function setFeatured(id: string, featured: boolean): Promise<Action
   return { ok: true };
 }
 
+/** Archives or restores a photo. Archived photos are hidden from the public site. */
+export async function setPhotoArchived(id: string, archived: boolean): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isDbConfigured()) return DB_MISSING;
+  if (!isUuid(id)) return { error: "Unknown photo." };
+
+  const [updated] = await getDb()
+    .update(photos)
+    .set({ archivedAt: archived ? new Date() : null })
+    .where(eq(photos.id, id))
+    .returning({ section: photos.section });
+  if (!updated) return { error: "That photo no longer exists." };
+
+  revalidateSection(updated.section);
+  return { ok: true };
+}
+
 // ---------- Stories (editorial / commercial) ----------
 
 function readStoryFields(formData: FormData) {
@@ -203,6 +220,23 @@ export async function updateStory(_prev: ActionResult, formData: FormData): Prom
   const [updated] = await getDb()
     .update(stories)
     .set(fields)
+    .where(eq(stories.id, id))
+    .returning({ section: stories.section });
+  if (!updated) return { error: "That story no longer exists." };
+
+  revalidateSection(updated.section);
+  return { ok: true };
+}
+
+/** Archives or restores a story. Archived stories, and all their photos, are hidden from the public site. */
+export async function setStoryArchived(id: string, archived: boolean): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isDbConfigured()) return DB_MISSING;
+  if (!isUuid(id)) return { error: "Unknown story." };
+
+  const [updated] = await getDb()
+    .update(stories)
+    .set({ archivedAt: archived ? new Date() : null })
     .where(eq(stories.id, id))
     .returning({ section: stories.section });
   if (!updated) return { error: "That story no longer exists." };

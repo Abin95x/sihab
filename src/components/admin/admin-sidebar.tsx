@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { logout } from "@/app/admin/actions";
 import { isDbConfigured } from "@/lib/db";
 import styles from "./admin.module.css";
+import { LogoutButton } from "./logout-button";
 
 export const ADMIN_TABS = [
   { id: "home", label: "Homepage", description: "Front page gallery" },
@@ -11,9 +11,23 @@ export const ADMIN_TABS = [
 
 export type AdminTabId = (typeof ADMIN_TABS)[number]["id"];
 
-type Props = { active: AdminTabId; username: string };
+type Props = { active: AdminTabId };
 
-export function AdminSidebar({ active, username }: Props) {
+const TAB_ICONS: Record<AdminTabId, React.ReactNode> = {
+  // House
+  home: <path d="M3 10.5 12 3l9 7.5M5 9v11h5v-6h4v6h5V9" />,
+  // Open magazine
+  editorial: <path d="M12 6.5C10 5 7 4.5 3 5v13c4-.5 7 0 9 1.5m0-13c2-1.5 5-2 9-1.5v13c-4-.5-7 0-9 1.5m0-13v13" />,
+  // Briefcase
+  commercial: (
+    <>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" />
+    </>
+  ),
+};
+
+export function AdminSidebar({ active }: Props) {
   const dbReady = isDbConfigured();
 
   return (
@@ -23,7 +37,6 @@ export function AdminSidebar({ active, username }: Props) {
       </Link>
 
       <nav className={styles.nav} aria-label="Sections">
-        <p className={styles.navLabel}>Sections</p>
         <ul className={styles.navList}>
           {ADMIN_TABS.map((t) => (
             <li key={t.id}>
@@ -32,8 +45,21 @@ export function AdminSidebar({ active, username }: Props) {
                 className={styles.navLink}
                 aria-current={t.id === active ? "page" : undefined}
               >
-                <span className={styles.navTitle}>{t.label}</span>
-                <span className={styles.navDescription}>{t.description}</span>
+                <svg
+                  className={styles.navIcon}
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  {TAB_ICONS[t.id]}
+                </svg>
+                {t.label}
               </Link>
             </li>
           ))}
@@ -47,23 +73,12 @@ export function AdminSidebar({ active, username }: Props) {
         </p>
         <Link href="/" target="_blank" className={styles.sideLink}>
           View site
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
             <path d="M5 3h8v8M13 3 3 13" fill="none" stroke="currentColor" strokeWidth="1.6" />
           </svg>
         </Link>
         <div className={styles.account}>
-          <span className={styles.avatar} aria-hidden="true">
-            {username.charAt(0).toUpperCase()}
-          </span>
-          <span className={styles.accountMeta}>
-            <span className={styles.accountName}>{username}</span>
-            <span className={styles.accountRole}>Signed in</span>
-          </span>
-          <form action={logout}>
-            <button type="submit" className={styles.logout}>
-              Log out
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </div>
     </aside>

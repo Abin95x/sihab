@@ -12,6 +12,8 @@ export type PhotoMeta = {
   src?: string;
   /** Starred to appear on the homepage. Only set for database photos. */
   featured?: boolean;
+  /** Hidden from the public site. Only set for database photos loaded by the admin. */
+  archived?: boolean;
 };
 
 export type StoryWithPhotos = {
@@ -19,6 +21,8 @@ export type StoryWithPhotos = {
   title: string;
   description: string;
   photos: PhotoMeta[];
+  /** Hidden from the public site. Only set for database stories loaded by the admin. */
+  archived?: boolean;
 };
 
 /** Longest edge, in pixels, of the stored full-size image. */
