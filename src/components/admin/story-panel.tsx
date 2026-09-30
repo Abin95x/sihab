@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { deleteStory, updateStory } from "@/app/admin/actions";
-import type { StorySection, StoryWithPhotos } from "@/lib/photos";
+import type { Section, StoryWithPhotos } from "@/lib/photos";
 import { AdminPhotoGrid } from "./admin-photo-grid";
 import styles from "./admin.module.css";
 import { UploadDropzone } from "./upload-dropzone";
 import { useFormAction } from "./use-form-action";
 
-type Props = { section: StorySection; story: StoryWithPhotos; defaultOpen: boolean };
+type Props = { section: Section; story: StoryWithPhotos; defaultOpen: boolean };
 
 export function StoryPanel({ section, story, defaultOpen }: Props) {
   const { state, pending: saving, onSubmit } = useFormAction(updateStory);

@@ -11,7 +11,7 @@ export function AdminPhotoGrid({ photos }: { photos: PhotoMeta[] }) {
   const [visible, hide] = useOptimistic(photos, (state, id: string) => state.filter((p) => p.id !== id));
 
   if (photos.length === 0) {
-    return <p className={styles.hint}>No photos yet.</p>;
+    return <p className={styles.empty}>No photos yet.</p>;
   }
 
   function remove(photo: PhotoMeta, number: string) {
@@ -36,7 +36,7 @@ export function AdminPhotoGrid({ photos }: { photos: PhotoMeta[] }) {
           const number = pad2(photos.indexOf(photo) + 1);
           return (
             <li key={photo.id} className={styles.tile}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- served from the photo API */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- served from the storage bucket */}
               <img src={photoUrl(photo, "thumb")} alt={`Photo ${number}`} loading="lazy" decoding="async" />
               <span className={styles.tileNumber}>{number}</span>
               <button

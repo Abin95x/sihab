@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { createStory } from "@/app/admin/actions";
-import type { StorySection } from "@/lib/photos";
+import type { Section } from "@/lib/photos";
 import styles from "./admin.module.css";
 import { useFormAction } from "./use-form-action";
 
-export function NewStoryForm({ section }: { section: StorySection }) {
+export function NewStoryForm({ section }: { section: Section }) {
   const formRef = useRef<HTMLFormElement>(null);
   const { state, pending, onSubmit } = useFormAction(createStory);
 

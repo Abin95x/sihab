@@ -1,22 +1,38 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { connection } from "next/server";
 import { getDb, isDbConfigured } from "./db";
 import { demoHomePhotos, demoStories } from "./demo";
 import { photos, stories } from "./db/schema";
-import type { PhotoMeta, StorySection, StoryWithPhotos } from "./photos";
+import type { PhotoMeta, Section, StoryWithPhotos } from "./photos";
 
-const photoMeta = { id: photos.id, width: photos.width, height: photos.height };
+const photoMeta = {
+  id: photos.id,
+  width: photos.width,
+  height: photos.height,
+  featured: sql<boolean>`${photos.featuredAt} is not null`,
+};
 
+/** Starred photos, in the order they were starred. */
 export async function queryHomePhotos(): Promise<PhotoMeta[]> {
   return getDb()
     .select(photoMeta)
     .from(photos)
-    .where(and(eq(photos.section, "home"), isNull(photos.storyId)))
-    .orderBy(asc(photos.sortOrder), asc(photos.createdAt));
+    .where(isNotNull(photos.featuredAt))
+    .orderBy(asc(photos.featuredAt));
 }
 
-export async function queryStories(section: StorySection): Promise<StoryWithPhotos[]> {
+export type StoryOption = { id: string; title: string; section: Section };
+
+/** Every story, for the story picker on the admin upload screen. */
+export async function queryStoryOptions(): Promise<StoryOption[]> {
+  return getDb()
+    .select({ id: stories.id, title: stories.title, section: stories.section })
+    .from(stories)
+    .orderBy(asc(stories.sortOrder), desc(stories.createdAt));
+}
+
+export async function queryStories(section: Section): Promise<StoryWithPhotos[]> {
   const db = getDb();
   const storyRows = await db
     .select({ id: stories.id, title: stories.title, description: stories.description })
@@ -33,7 +49,7 @@ export async function queryStories(section: StorySection): Promise<StoryWithPhot
 
   const byStory = new Map<string, PhotoMeta[]>(storyRows.map((s) => [s.id, []]));
   for (const { storyId, ...photo } of photoRows) {
-    if (storyId) byStory.get(storyId)?.push(photo);
+    byStory.get(storyId)?.push(photo);
   }
   return storyRows.map((s) => ({ ...s, photos: byStory.get(s.id) ?? [] }));
 }
@@ -52,7 +68,7 @@ export async function getHomePhotos(): Promise<PhotoMeta[]> {
   }
 }
 
-export async function getStories(section: StorySection): Promise<StoryWithPhotos[]> {
+export async function getStories(section: Section): Promise<StoryWithPhotos[]> {
   await connection();
   if (!isDbConfigured()) return demoStories[section];
   try {

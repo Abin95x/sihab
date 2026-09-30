@@ -73,6 +73,11 @@ export function UploadDropzone({ section, storyId }: Props) {
           className="visually-hidden"
           onChange={(e) => upload(e.currentTarget.files)}
         />
+        <span className={styles.dropzoneIcon} aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22">
+            <path d="M12 16V4m0 0-5 5m5-5 5 5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
         <span className={styles.dropzoneTitle}>
           {progress ? `Uploading ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : "Add photos"}
         </span>

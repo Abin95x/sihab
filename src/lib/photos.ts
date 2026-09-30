@@ -1,15 +1,17 @@
 // Shared by server and client: photo types, sections and URL helpers.
 
-export const SECTIONS = ["home", "editorial", "commercial"] as const;
+// Every photo belongs to a story in one of these sections. Starred photos also appear on the homepage.
+export const SECTIONS = ["editorial", "commercial"] as const;
 export type Section = (typeof SECTIONS)[number];
-export type StorySection = Exclude<Section, "home">;
 
 export type PhotoMeta = {
   id: string;
   width: number;
   height: number;
-  /** Static image URL for demo photos; database photos are served from the photo API. */
+  /** Static image URL for demo photos; database photos are served from the storage bucket. */
   src?: string;
+  /** Starred to appear on the homepage. Only set for database photos. */
+  featured?: boolean;
 };
 
 export type StoryWithPhotos = {
@@ -28,18 +30,19 @@ export function isSection(value: unknown): value is Section {
   return typeof value === "string" && (SECTIONS as readonly string[]).includes(value);
 }
 
-export function isStorySection(value: unknown): value is StorySection {
-  return value === "editorial" || value === "commercial";
-}
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
 }
 
+/** Object key of a stored photo file in the storage bucket. */
+export function photoKey(id: string, size: "thumb" | "full") {
+  return `photos/${id}/${size}.webp`;
+}
+
 export function photoUrl(photo: PhotoMeta, size: "thumb" | "full") {
-  return photo.src ?? `/api/photos/${photo.id}/${size}`;
+  return photo.src ?? `${process.env.NEXT_PUBLIC_PHOTOS_URL}/${photoKey(photo.id, size)}`;
 }
 
 export function photoSrcSet(photo: PhotoMeta) {

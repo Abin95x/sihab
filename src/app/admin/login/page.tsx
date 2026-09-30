@@ -10,9 +10,18 @@ export const metadata: Metadata = { title: "Sign in" };
 export default function LoginPage() {
   return (
     <main className={styles.loginPage}>
+      <span className={styles.loginBackdrop} aria-hidden="true">
+        {site.name}
+      </span>
       <div className={styles.loginCard}>
-        <p className={styles.brand}>{site.name}</p>
-        <h1 className={styles.loginTitle}>Admin sign in</h1>
+        <p className={styles.wordmark}>
+          {site.name}
+          <span className={styles.wordmarkTag}>Admin</span>
+        </p>
+        <div>
+          <h1 className={styles.loginTitle}>Welcome back</h1>
+          <p className={styles.hint}>Sign in to manage photos and stories.</p>
+        </div>
         {!isAdminConfigured() && (
           <p className={styles.alert}>
             Login is disabled until <code>ADMIN_USERNAME</code>, <code>ADMIN_PASSWORD</code> and{" "}

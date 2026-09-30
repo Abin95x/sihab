@@ -1,6 +1,7 @@
 "use server";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -8,21 +9,27 @@ import { checkCredentials, createSession, destroySession, isAdminConfigured, req
 import { getDb, isDbConfigured } from "@/lib/db";
 import { photos, stories } from "@/lib/db/schema";
 import { processImage } from "@/lib/images";
-import { isSection, isStorySection, isUuid, type Section } from "@/lib/photos";
+import { isSection, isUuid, type Section } from "@/lib/photos";
 import { clearFailures, isRateLimited, recordFailure } from "@/lib/rate-limit";
+import { deletePhotoFiles, isStorageConfigured, putPhotoFiles } from "@/lib/storage";
 
-export type ActionResult = { ok?: boolean; error?: string };
+export type ActionResult = { ok?: boolean; error?: string; id?: string };
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const MAX_TITLE = 200;
 const MAX_DESCRIPTION = 5000;
 
+// The homepage is included because any photo may be starred to appear there.
 function revalidateSection(section: Section) {
-  revalidatePath(section === "home" ? "/" : `/${section}`);
+  revalidatePath("/");
+  revalidatePath(`/${section}`);
   revalidatePath("/admin");
 }
 
 const DB_MISSING: ActionResult = { error: "Database is not configured. Set DATABASE_URL and restart the server." };
+const STORAGE_MISSING: ActionResult = {
+  error: "Photo storage is not configured. Set the S3_* and NEXT_PUBLIC_PHOTOS_URL variables and restart the server.",
+};
 
 // ---------- Auth ----------
 
@@ -57,27 +64,23 @@ export async function logout() {
 export async function uploadPhoto(formData: FormData): Promise<ActionResult> {
   await requireAdmin();
   if (!isDbConfigured()) return DB_MISSING;
+  if (!isStorageConfigured()) return STORAGE_MISSING;
 
-  const section = formData.get("section");
-  if (!isSection(section)) return { error: "Unknown section." };
+  const storyId = formData.get("storyId");
+  if (!isUuid(storyId)) return { error: "Choose a story for this photo." };
+  const featured = formData.get("featured") === "on";
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "No file received." };
   if (file.size > MAX_UPLOAD_BYTES) return { error: `${file.name} is larger than 12 MB.` };
 
   const db = getDb();
-  let storyId: string | null = null;
-  if (section !== "home") {
-    const requested = formData.get("storyId");
-    if (!isUuid(requested)) return { error: "Choose a story for this photo." };
-    const [story] = await db
-      .select({ id: stories.id })
-      .from(stories)
-      .where(and(eq(stories.id, requested), eq(stories.section, section)))
-      .limit(1);
-    if (!story) return { error: "That story no longer exists." };
-    storyId = story.id;
-  }
+  const [story] = await db
+    .select({ id: stories.id, section: stories.section })
+    .from(stories)
+    .where(eq(stories.id, storyId))
+    .limit(1);
+  if (!story) return { error: "That story no longer exists." };
 
   let image: Awaited<ReturnType<typeof processImage>>;
   try {
@@ -86,16 +89,35 @@ export async function uploadPhoto(formData: FormData): Promise<ActionResult> {
     return { error: `${file.name} could not be read. Use JPEG, PNG, WebP or AVIF.` };
   }
 
-  const scope = storyId
-    ? eq(photos.storyId, storyId)
-    : and(eq(photos.section, "home"), isNull(photos.storyId));
   const [{ next }] = await db
     .select({ next: sql<number>`coalesce(max(${photos.sortOrder}), -1) + 1` })
     .from(photos)
-    .where(scope);
+    .where(eq(photos.storyId, story.id));
 
-  await db.insert(photos).values({ section, storyId, ...image, sortOrder: Number(next) });
-  revalidateSection(section);
+  // Files go up first so a photo row never points at missing files.
+  const id = randomUUID();
+  try {
+    await putPhotoFiles(id, image);
+  } catch (error) {
+    console.error("[sihab] Failed to store photo files", error);
+    return { error: `${file.name} could not be saved to storage. Try again.` };
+  }
+
+  try {
+    await db.insert(photos).values({
+      id,
+      section: story.section,
+      storyId: story.id,
+      width: image.width,
+      height: image.height,
+      sortOrder: Number(next),
+      featuredAt: featured ? new Date() : null,
+    });
+  } catch (error) {
+    await deletePhotoFiles([id]);
+    throw error;
+  }
+  revalidateSection(story.section);
   return { ok: true };
 }
 
@@ -110,7 +132,25 @@ export async function deletePhoto(id: string): Promise<ActionResult> {
     .returning({ section: photos.section });
   if (!deleted) return { error: "That photo was already removed." };
 
+  await deletePhotoFiles([id]);
   revalidateSection(deleted.section);
+  return { ok: true };
+}
+
+/** Stars or unstars a photo. Starred photos appear on the homepage. */
+export async function setFeatured(id: string, featured: boolean): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isDbConfigured()) return DB_MISSING;
+  if (!isUuid(id)) return { error: "Unknown photo." };
+
+  const [updated] = await getDb()
+    .update(photos)
+    .set({ featuredAt: featured ? new Date() : null })
+    .where(eq(photos.id, id))
+    .returning({ section: photos.section });
+  if (!updated) return { error: "That photo no longer exists." };
+
+  revalidateSection(updated.section);
   return { ok: true };
 }
 
@@ -132,7 +172,7 @@ export async function createStory(_prev: ActionResult, formData: FormData): Prom
   if (!isDbConfigured()) return DB_MISSING;
 
   const section = formData.get("section");
-  if (!isStorySection(section)) return { error: "Unknown section." };
+  if (!isSection(section)) return { error: "Choose Editorial or Commercial." };
   const fields = readStoryFields(formData);
   if ("error" in fields) return fields;
 
@@ -143,9 +183,12 @@ export async function createStory(_prev: ActionResult, formData: FormData): Prom
     .from(stories)
     .where(eq(stories.section, section));
 
-  await db.insert(stories).values({ section, ...fields, sortOrder: Number(first) });
+  const [created] = await db
+    .insert(stories)
+    .values({ section, ...fields, sortOrder: Number(first) })
+    .returning({ id: stories.id });
   revalidateSection(section);
-  return { ok: true };
+  return { ok: true, id: created.id };
 }
 
 export async function updateStory(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -173,12 +216,13 @@ export async function deleteStory(id: string): Promise<ActionResult> {
   if (!isDbConfigured()) return DB_MISSING;
   if (!isUuid(id)) return { error: "Unknown story." };
 
-  // Photos in the story are removed by the foreign key's ON DELETE CASCADE.
-  const [deleted] = await getDb()
-    .delete(stories)
-    .where(eq(stories.id, id))
-    .returning({ section: stories.section });
+  // Photo rows in the story are removed by the foreign key's ON DELETE CASCADE; their files are removed here.
+  const db = getDb();
+  const storyPhotos = await db.select({ id: photos.id }).from(photos).where(eq(photos.storyId, id));
+  const [deleted] = await db.delete(stories).where(eq(stories.id, id)).returning({ section: stories.section });
   if (!deleted) return { error: "That story was already removed." };
+
+  await deletePhotoFiles(storyPhotos.map((p) => p.id));
 
   revalidateSection(deleted.section);
   return { ok: true };

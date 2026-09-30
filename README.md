@@ -23,7 +23,11 @@ npm run dev                  # http://localhost:3000
 
 | Variable         | Purpose                                                                    |
 | ---------------- | -------------------------------------------------------------------------- |
-| `DATABASE_URL`   | PostgreSQL connection string. Hosted providers usually need `?sslmode=require`. |
+| `DATABASE_URL`   | PostgreSQL connection string (Supabase: use the session pooler URL). |
+| `S3_ENDPOINT`, `S3_REGION` | S3-compatible storage endpoint and region for the photo files (Supabase: Storage > S3). |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Storage access key. |
+| `S3_BUCKET`      | Bucket name. It must be public, since pages link to the files directly. |
+| `NEXT_PUBLIC_PHOTOS_URL` | Public URL of the bucket, e.g. `https://<project>.supabase.co/storage/v1/object/public/<bucket>`. Inlined at build time. |
 | `ADMIN_USERNAME` | Admin login username.                                                      |
 | `ADMIN_PASSWORD` | Admin login password. Changing it signs out existing sessions.             |
 | `AUTH_SECRET`    | 32+ character random string for signing the session cookie (`openssl rand -base64 32`). |
@@ -48,7 +52,7 @@ Uploads accept JPEG, PNG, WebP and AVIF. Large images are shrunk in the browser 
 ## How it's built
 
 - **Database:** PostgreSQL through [Drizzle ORM](https://orm.drizzle.team). Schema: `src/lib/db/schema.ts`.
-- **Image storage:** image bytes are stored in Postgres and served from `/api/photos/:id/(thumb|full)` with long-lived cache headers. Nothing but `DATABASE_URL` is needed, and it works on serverless hosts.
+- **Image storage:** image files go to an S3-compatible public bucket (Supabase Storage) as `photos/<id>/full.webp` and `photos/<id>/thumb.webp`, with long-lived cache headers. Postgres holds only the photo metadata. `/api/photos/:id/(thumb|full)` redirects to the bucket for old links.
 - **Auth:** single admin account from environment variables. The session is a signed, httpOnly JWT cookie (`jose`). Every admin page and Server Action checks the session on the server. Failed logins are throttled.
 - **Editable copy:** name, bio, email and Instagram link live in `src/lib/site.ts`.
 
@@ -56,7 +60,7 @@ Uploads accept JPEG, PNG, WebP and AVIF. Large images are shrunk in the browser 
 src/
   app/(site)/          public pages (home, editorial, commercial)
   app/admin/           admin dashboard, login, Server Actions
-  app/api/photos/      image endpoint
+  app/api/photos/      redirect from old image URLs to the bucket
   components/          header, footer, marquee, lightbox, story list
   components/admin/    upload box, photo grid, story forms
   lib/                 db, auth, data queries, image processing, site config
@@ -78,4 +82,6 @@ src/
 
 ## Deploying
 
-Set the four environment variables on your host and run `npm run db:push` once against the production database. On Vercel, each upload request must stay under 4.5 MB. The in-browser resizing keeps typical camera photos well under that.
+`.github/workflows/db-ping.yml` queries the database once a day so a free Supabase project isn't paused for inactivity. Add `DATABASE_URL` as a repository secret for it to work.
+
+Set the environment variables on your host and run `npm run db:push` once against the production database. On Vercel, each upload request must stay under 4.5 MB. The in-browser resizing keeps typical camera photos well under that.
