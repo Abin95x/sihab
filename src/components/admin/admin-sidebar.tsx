@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { isDbConfigured } from "@/lib/db";
 import styles from "./admin.module.css";
+import { LinkPending } from "./link-pending";
 import { LogoutButton } from "./logout-button";
 
 export const ADMIN_TABS = [
@@ -45,20 +46,22 @@ export function AdminSidebar({ active }: Props) {
                 className={styles.navLink}
                 aria-current={t.id === active ? "page" : undefined}
               >
-                <svg
-                  className={styles.navIcon}
-                  viewBox="0 0 24 24"
-                  width="16"
-                  height="16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  {TAB_ICONS[t.id]}
-                </svg>
+                <LinkPending size={16}>
+                  <svg
+                    className={styles.navIcon}
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    {TAB_ICONS[t.id]}
+                  </svg>
+                </LinkPending>
                 {t.label}
               </Link>
             </li>
@@ -71,12 +74,6 @@ export function AdminSidebar({ active }: Props) {
           <span className={styles.statusDot} aria-hidden="true" />
           {dbReady ? "Database connected" : "Demo mode · no database"}
         </p>
-        <Link href="/" target="_blank" className={styles.sideLink}>
-          View site
-          <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
-            <path d="M5 3h8v8M13 3 3 13" fill="none" stroke="currentColor" strokeWidth="1.6" />
-          </svg>
-        </Link>
         <div className={styles.account}>
           <LogoutButton />
         </div>

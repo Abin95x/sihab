@@ -7,7 +7,10 @@ import { deleteStory, setStoryArchived, updateStory } from "@/app/admin/actions"
 import type { Section, StoryWithPhotos } from "@/lib/photos";
 import { AdminPhotoGrid } from "./admin-photo-grid";
 import styles from "./admin.module.css";
+import { LinkPending } from "./link-pending";
+import { Spinner } from "./spinner";
 import { UploadDropzone } from "./upload-dropzone";
+import { useConfirm } from "./use-confirm";
 
 type Props = { section: Section; sectionLabel: string; shoot: StoryWithPhotos };
 
@@ -18,6 +21,7 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
   const [archiving, startArchive] = useTransition();
   const [deleting, startDelete] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
   const count = shoot.photos.length;
   const archivedCount = shoot.photos.filter((p) => p.archived).length;
   const back = `/admin?tab=${section}`;
@@ -41,9 +45,15 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
     });
   }
 
-  function remove() {
-    const warning = count > 0 ? ` and its ${count} photo${count === 1 ? "" : "s"}` : "";
-    if (!window.confirm(`Delete “${shoot.title}”${warning}? This cannot be undone.`)) return;
+  async function remove() {
+    const photosNote = count > 0 ? `Its ${count} photo${count === 1 ? "" : "s"} will be deleted too. ` : "";
+    const confirmed = await confirm({
+      title: `Delete “${shoot.title}”?`,
+      body: `${photosNote}This cannot be undone.`,
+      confirmLabel: "Delete shoot",
+      danger: true,
+    });
+    if (!confirmed) return;
     setError(null);
     startDelete(async () => {
       const result = await deleteStory(shoot.id);
@@ -54,21 +64,24 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
 
   return (
     <section className={styles.section} data-busy={deleting || undefined}>
+      {dialog}
       <header className={styles.sectionHead}>
         <Link href={back} className={styles.back}>
-          <svg
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M19 12H5M11 18l-6-6 6-6" />
-          </svg>
+          <LinkPending>
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M19 12H5M11 18l-6-6 6-6" />
+            </svg>
+          </LinkPending>
           Back to {sectionLabel}
         </Link>
         <div className={styles.headRow}>
@@ -83,9 +96,11 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
               Edit details
             </button>
             <button type="button" className={styles.secondary} onClick={toggleArchived} disabled={archiving}>
-              {archiving ? "Saving…" : shoot.archived ? "Unarchive" : "Archive"}
+              {archiving && <Spinner />}
+              {archiving ? (shoot.archived ? "Restoring…" : "Archiving…") : shoot.archived ? "Unarchive" : "Archive"}
             </button>
             <button type="button" className={styles.danger} onClick={remove} disabled={deleting}>
+              {deleting && <Spinner />}
               {deleting ? "Deleting…" : "Delete shoot"}
             </button>
           </div>
@@ -93,8 +108,8 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
         {shoot.description && <p className={styles.description}>{shoot.description}</p>}
         <p className={styles.hint}>
           {count} photo{count === 1 ? "" : "s"}
-          {archivedCount > 0 && `, ${archivedCount} archived`}. The first photo is shown large on the site; archived
-          photos are hidden.
+          {archivedCount > 0 && `, ${archivedCount} archived`}. Drag photos to reorder them; the first is shown large
+          on the site and archived photos are hidden.
         </p>
       </header>
 
@@ -121,9 +136,10 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
           </label>
           <div className={styles.row}>
             <button type="submit" className={styles.primary} disabled={saving}>
+              {saving && <Spinner />}
               {saving ? "Saving…" : "Save"}
             </button>
-            <button type="button" className={styles.secondary} onClick={() => setEditing(false)}>
+            <button type="button" className={styles.secondary} onClick={() => setEditing(false)} disabled={saving}>
               Cancel
             </button>
           </div>
@@ -131,7 +147,7 @@ export function ShootView({ section, sectionLabel, shoot }: Props) {
       )}
 
       <UploadDropzone section={section} storyId={shoot.id} />
-      <AdminPhotoGrid photos={shoot.photos} />
+      <AdminPhotoGrid photos={shoot.photos} storyId={shoot.id} />
     </section>
   );
 }

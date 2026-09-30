@@ -5,6 +5,7 @@ import { createStory } from "@/app/admin/actions";
 import { useLightDismissFallback } from "@/components/use-light-dismiss";
 import type { Section } from "@/lib/photos";
 import styles from "./admin.module.css";
+import { Spinner } from "./spinner";
 
 export function NewShootDialog({ section }: { section: Section }) {
   const titleId = useId();
@@ -62,9 +63,15 @@ export function NewShootDialog({ section }: { section: Section }) {
           )}
           <div className={styles.row}>
             <button type="submit" className={styles.primary} disabled={pending}>
+              {pending && <Spinner />}
               {pending ? "Creating…" : "Create"}
             </button>
-            <button type="button" className={styles.secondary} onClick={() => dialogRef.current?.close()}>
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => dialogRef.current?.close()}
+              disabled={pending}
+            >
               Cancel
             </button>
           </div>

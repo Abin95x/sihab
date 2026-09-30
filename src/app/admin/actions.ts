@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -18,12 +18,26 @@ export type ActionResult = { ok?: boolean; error?: string; id?: string };
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const MAX_TITLE = 200;
 const MAX_DESCRIPTION = 5000;
+const MAX_REORDER = 1000;
 
 // The homepage is included because any photo may be starred to appear there.
 function revalidateSection(section: Section) {
   revalidatePath("/");
   revalidatePath(`/${section}`);
   revalidatePath("/admin");
+}
+
+/** Validates a list of ids sent from a drag-and-drop reorder. */
+function readOrder(ids: unknown): string[] | null {
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_REORDER) return null;
+  if (!ids.every(isUuid) || new Set(ids).size !== ids.length) return null;
+  return ids;
+}
+
+/** SQL giving each id its index in `ids`, for setting sort_order in one statement. */
+function positionIn(column: AnyColumn, ids: string[]) {
+  const cases = ids.map((id, i) => sql`when ${column} = ${id} then ${sql.raw(String(i))}`);
+  return sql`case ${sql.join(cases, sql` `)} end`;
 }
 
 const DB_MISSING: ActionResult = { error: "Database is not configured. Set DATABASE_URL and restart the server." };
@@ -171,6 +185,24 @@ export async function setPhotoArchived(id: string, archived: boolean): Promise<A
   return { ok: true };
 }
 
+/** Saves the order of a story's photos after a drag-and-drop. `ids` is the full new order. */
+export async function reorderPhotos(storyId: string, ids: string[]): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isDbConfigured()) return DB_MISSING;
+  const order = readOrder(ids);
+  if (!isUuid(storyId) || !order) return { error: "Could not save the new order. Reload and try again." };
+
+  const updated = await getDb()
+    .update(photos)
+    .set({ sortOrder: positionIn(photos.id, order) })
+    .where(and(eq(photos.storyId, storyId), inArray(photos.id, order)))
+    .returning({ section: photos.section });
+  if (updated.length === 0) return { error: "Those photos no longer exist." };
+
+  revalidateSection(updated[0].section);
+  return { ok: true };
+}
+
 // ---------- Stories (editorial / commercial) ----------
 
 function readStoryFields(formData: FormData) {
@@ -242,6 +274,22 @@ export async function setStoryArchived(id: string, archived: boolean): Promise<A
   if (!updated) return { error: "That story no longer exists." };
 
   revalidateSection(updated.section);
+  return { ok: true };
+}
+
+/** Saves the order of a section's stories after a drag-and-drop. `ids` is the new order of the dragged group. */
+export async function reorderStories(section: Section, ids: string[]): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isDbConfigured()) return DB_MISSING;
+  const order = readOrder(ids);
+  if (!isSection(section) || !order) return { error: "Could not save the new order. Reload and try again." };
+
+  await getDb()
+    .update(stories)
+    .set({ sortOrder: positionIn(stories.id, order) })
+    .where(and(eq(stories.section, section), inArray(stories.id, order)));
+
+  revalidateSection(section);
   return { ok: true };
 }
 

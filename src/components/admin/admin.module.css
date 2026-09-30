@@ -211,37 +211,18 @@
   background: #2f9e6b;
 }
 
-.sideLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--a-muted);
-  font-size: 12px;
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.sideLink:hover {
-  color: var(--a-ink);
-}
-
 .logout {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 0 14px 0 12px;
+  justify-content: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 18px 0 16px;
   border: 1px solid var(--a-line);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--a-ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
@@ -264,8 +245,13 @@
   }
 
   .account {
-    padding-top: 12px;
+    padding-top: 16px;
     border-top: 1px solid var(--a-line);
+  }
+
+  .account .logout {
+    flex: 1;
+    min-height: 44px;
   }
 }
 
@@ -427,6 +413,25 @@
   }
 }
 
+/* Drag-and-drop: stop the long-press menu and text selection on touch, and lift the dragged item. */
+.folderItem,
+.tile {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.folderItem[data-dragging],
+.tile[data-dragging] {
+  position: relative;
+  z-index: 5;
+  cursor: grabbing;
+}
+
+.folderItem[data-dragging] .folderFrame,
+.tile[data-dragging] {
+  box-shadow: 0 16px 32px -12px rgba(0, 0, 0, 0.35);
+}
+
 .folder {
   display: grid;
   gap: 4px;
@@ -437,6 +442,10 @@
 /* A plain folder shape with a tab on top-left. */
 .folderFrame {
   position: relative;
+  /* Centers the spinner shown while the folder opens. */
+  display: grid;
+  place-items: center;
+  color: var(--a-muted);
   aspect-ratio: 4 / 3;
   margin: 10px 0 8px;
   border-radius: 0 4px 4px 4px;
@@ -636,6 +645,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   min-height: 40px;
   padding: 0 20px;
   border: 1px solid transparent;
@@ -657,6 +667,14 @@
 
 .primary:hover {
   background: #333;
+}
+
+.primaryDanger {
+  background: var(--a-danger);
+}
+
+.primaryDanger:hover {
+  background: #8f1e18;
 }
 
 .secondary {
@@ -768,6 +786,9 @@
   top: 6px;
   left: 6px;
   z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 6px;
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.55);
@@ -812,16 +833,16 @@
 }
 
 .tileButton {
-  min-height: 30px;
-  padding: 0 10px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 999px;
   background: #fff;
   color: var(--a-ink);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
@@ -831,12 +852,74 @@
   color: #fff;
 }
 
+.tileStar[aria-pressed="true"] {
+  color: #d99a00;
+}
+
+.tileStar[aria-pressed="true"]:hover {
+  background: #d99a00;
+  color: #fff;
+}
+
 .tileDelete {
   color: var(--a-danger);
 }
 
 .tileDelete:hover {
   background: var(--a-danger);
+}
+
+/* Tooltip. Right-aligned so the last button's label stays inside the tile, which clips overflow. */
+.tileButton::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.tileButton:hover::after,
+.tileButton:focus-visible::after {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.25s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tileButton::after {
+    transform: none;
+  }
+}
+
+.tileBusy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--a-ink);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tile[data-busy] .tileActions {
+  visibility: hidden;
 }
 
 /* On devices with a mouse, reveal the tile buttons on hover; touch keeps them visible. */
@@ -849,6 +932,49 @@
   .tile:focus-within .tileActions {
     opacity: 1;
   }
+}
+
+/* ---------- Loading ---------- */
+
+.spinner {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.8s;
+  }
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--a-ink);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.35);
+  transform: translateX(-50%);
 }
 
 /* ---------- Messages ---------- */

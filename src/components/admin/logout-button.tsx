@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { logout } from "@/app/admin/actions";
 import { useLightDismissFallback } from "@/components/use-light-dismiss";
 import styles from "./admin.module.css";
+import { Spinner } from "./spinner";
 
 export function LogoutButton() {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -15,8 +16,8 @@ export function LogoutButton() {
       <button type="button" className={styles.logout} onClick={() => dialogRef.current?.showModal()}>
         <svg
           viewBox="0 0 24 24"
-          width="14"
-          height="14"
+          width="16"
+          height="16"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.8"
@@ -59,6 +60,7 @@ function ConfirmButton() {
   const { pending } = useFormStatus();
   return (
     <button type="submit" className={styles.primary} disabled={pending}>
+      {pending && <Spinner />}
       {pending ? "Logging out…" : "Log out"}
     </button>
   );

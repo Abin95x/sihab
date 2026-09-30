@@ -2,6 +2,7 @@
 
 import { login } from "@/app/admin/actions";
 import styles from "./admin.module.css";
+import { Spinner } from "./spinner";
 import { useFormAction } from "./use-form-action";
 
 export function LoginForm() {
@@ -23,6 +24,7 @@ export function LoginForm() {
         </p>
       )}
       <button type="submit" className={styles.primary} disabled={pending}>
+        {pending && <Spinner />}
         {pending ? "Signing in…" : "Sign in"}
       </button>
     </form>

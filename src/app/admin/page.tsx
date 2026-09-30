@@ -67,7 +67,9 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                 <h1>{activeLabel}</h1>
                 <NewShootDialog section={active} />
               </div>
-              <p className={styles.hint}>Each shoot is a folder of photos. Open one to add or remove photos.</p>
+              <p className={styles.hint}>
+                Each shoot is a folder of photos. Open one to add or remove photos, or drag folders to reorder them.
+              </p>
             </header>
             {liveShoots.length > 0 ? (
               <ShootFolders section={active} shoots={liveShoots} />
