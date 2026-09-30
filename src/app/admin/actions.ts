@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql, type AnyColumn } from "drizzle-orm";
 import { revalidatePath, updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -270,6 +270,30 @@ export async function reorderPhotos(storyId: string, ids: string[]): Promise<Act
     .update(photos)
     .set({ sortOrder: positionIn(photos.id, order) })
     .where(and(eq(photos.storyId, storyId), inArray(photos.id, order)))
+    .returning({ section: photos.section });
+  if (updated.length === 0) return { error: "Those photos no longer exist." };
+
+  revalidateSection(updated[0].section);
+  return { ok: true };
+}
+
+/**
+ * Saves the order of the homepage's starred photos after a drag-and-drop. `ids` is the full new order.
+ * The homepage sorts by featured_at, so the photos are restamped a millisecond apart, ending just before
+ * now: the dragged order holds, and photos starred later still go last.
+ */
+export async function reorderHomePhotos(ids: string[]): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isDbConfigured()) return DB_MISSING;
+  const order = readOrder(ids);
+  if (!order) return { error: "Could not save the new order. Reload and try again." };
+
+  const updated = await getDb()
+    .update(photos)
+    .set({
+      featuredAt: sql`now() - (${sql.raw(String(order.length))} - ${positionIn(photos.id, order)}) * interval '1 millisecond'`,
+    })
+    .where(and(isNotNull(photos.featuredAt), inArray(photos.id, order)))
     .returning({ section: photos.section });
   if (updated.length === 0) return { error: "Those photos no longer exist." };
 

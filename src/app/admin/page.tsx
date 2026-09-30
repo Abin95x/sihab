@@ -50,11 +50,11 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             <header className={styles.sectionHead}>
               <h1>Homepage</h1>
               <p className={styles.hint}>
-                Starred story photos, shown on the homepage in the order they were starred. {homePhotos.length} photo
+                Starred story photos, shown on the homepage in this order. Drag photos to reorder them; newly starred photos go last. {homePhotos.length} photo
                 {homePhotos.length === 1 ? "" : "s"}.
               </p>
             </header>
-            <AdminPhotoGrid photos={homePhotos} />
+            <AdminPhotoGrid photos={homePhotos} homepage />
           </section>
         ) : openShoot ? (
           <ShootView key={openShoot.id} section={active} sectionLabel={activeLabel} shoot={openShoot} />

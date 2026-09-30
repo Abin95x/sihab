@@ -38,7 +38,7 @@ function toPage<T>(rows: T[], offset: number, limit: number): Page<T> {
 }
 
 /**
- * Starred photos, in the order they were starred. Archived photos and photos in archived stories are left out.
+ * Starred photos, in the order they were starred (or dragged into in the admin). Archived photos and photos in archived stories are left out.
  * Pass `limit` to fetch one slice; without it every starred photo is returned (admin only).
  */
 export async function queryHomePhotos({ offset = 0, limit }: Range = {}): Promise<PhotoMeta[]> {

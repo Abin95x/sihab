@@ -33,7 +33,8 @@ export const photos = pgTable(
     width: integer("width").notNull(),
     height: integer("height").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
-    // Set when the photo is starred for the homepage, which lists starred photos in this order.
+    // Set when the photo is starred for the homepage, which lists starred photos in this order. Reordering
+    // the homepage in the admin restamps it.
     featuredAt: timestamp("featured_at", { withTimezone: true }),
     // Archived photos stay in the admin but are hidden from the public site, including the homepage.
     archivedAt: timestamp("archived_at", { withTimezone: true }),

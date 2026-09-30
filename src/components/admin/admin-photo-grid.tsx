@@ -3,7 +3,7 @@
 import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { rectSortingStrategy, SortableContext } from "@dnd-kit/sortable";
 import { useId, useOptimistic, useState, useTransition } from "react";
-import { deletePhoto, reorderPhotos, setFeatured, setPhotoArchived } from "@/app/admin/actions";
+import { deletePhoto, reorderHomePhotos, reorderPhotos, setFeatured, setPhotoArchived } from "@/app/admin/actions";
 import { pad2, photoUrl, type PhotoMeta } from "@/lib/photos";
 import styles from "./admin.module.css";
 import { movedIds, SavingOrder, sortByIds, useDragGuard, useSortableItem, useSortSensors } from "./sortable";
@@ -14,17 +14,20 @@ type Busy = "archiving" | "restoring" | "deleting";
 type Tile = PhotoMeta & { busy?: Busy };
 type Change = { id: string; busy?: Busy; archived?: boolean; featured?: boolean } | { order: string[] };
 
-/** Photos with star, archive and delete buttons. Pass `storyId` to allow drag-and-drop reordering. */
+/** Photos with star, archive and delete buttons. Pass `storyId` or `homepage` to allow drag-and-drop reordering. */
 type Props = {
   photos: PhotoMeta[];
   /** Allows drag-and-drop reordering within this story. */
   storyId?: string;
+  /** Allows drag-and-drop reordering of the homepage's starred photos. */
+  homepage?: boolean;
   /** Shown as the first cell of the grid, before the photos (the "Add photos" card). */
   addTile?: React.ReactNode;
 };
 
 /** Photos with star, archive and delete buttons. */
-export function AdminPhotoGrid({ photos, storyId, addTile }: Props) {
+export function AdminPhotoGrid({ photos, storyId, homepage = false, addTile }: Props) {
+  const sortable = !!storyId || homepage;
   const dndId = useId();
   const sensors = useSortSensors();
   const dragGuard = useDragGuard();
@@ -52,11 +55,11 @@ export function AdminPhotoGrid({ photos, storyId, addTile }: Props) {
       tiles.map((p) => p.id),
       event,
     );
-    if (!order || !storyId) return;
+    if (!order || !sortable) return;
     setError(null);
     startOrdering(async () => {
       apply({ order });
-      const result = await reorderPhotos(storyId, order);
+      const result = storyId ? await reorderPhotos(storyId, order) : await reorderHomePhotos(order);
       if (result.error) setError(result.error);
     });
   }
@@ -114,7 +117,7 @@ export function AdminPhotoGrid({ photos, storyId, addTile }: Props) {
         onDragEnd={onDragEnd}
         onDragCancel={dragGuard.end}
       >
-        <SortableContext items={tiles.map((p) => p.id)} strategy={rectSortingStrategy} disabled={!storyId}>
+        <SortableContext items={tiles.map((p) => p.id)} strategy={rectSortingStrategy} disabled={!sortable}>
           <ul className={styles.grid}>
             {addTile}
             {tiles.map((photo, i) => (
@@ -122,7 +125,7 @@ export function AdminPhotoGrid({ photos, storyId, addTile }: Props) {
                 key={photo.id}
                 photo={photo}
                 number={pad2(i + 1)}
-                sortable={!!storyId}
+                sortable={sortable}
                 dragGuard={dragGuard.ref}
                 onStar={() => toggleFeatured(photo)}
                 onArchive={() => toggleArchived(photo)}
