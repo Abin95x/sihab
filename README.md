@@ -81,6 +81,6 @@ src/
 
 ## Deploying
 
-`.github/workflows/db-ping.yml` queries the database once a day so a free Supabase project isn't paused for inactivity. Add `DATABASE_URL` as a repository secret for it to work.
+A Vercel Cron job (`vercel.json`) calls `/api/cron/ping` once a day, which queries the database so a free Supabase project isn't paused for inactivity. Set `CRON_SECRET` in Vercel's environment variables for it to work.
 
 Set the environment variables on your host, run `npm run db:push` once against the production database, and create an admin with `npm run admin:create`. On Vercel, each upload request must stay under 4.5 MB. The in-browser resizing keeps typical camera photos well under that.
